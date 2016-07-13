@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
@@ -29,6 +30,7 @@ import com.google.protobuf.ByteString;
 import org.apache.aurora.GuavaUtils;
 import org.apache.aurora.Protobufs;
 import org.apache.aurora.codec.ThriftBinaryCodec;
+import org.apache.aurora.gen.apiConstants;
 import org.apache.aurora.scheduler.TierManager;
 import org.apache.aurora.scheduler.base.JobKeys;
 import org.apache.aurora.scheduler.base.SchedulerException;
@@ -197,9 +199,15 @@ public interface MesosTaskFactory {
         throw new SchedulerException("Task had no supported container set.");
       }
 
-      if (taskBuilder.hasExecutor()) {
-        taskBuilder.setData(ByteString.copyFrom(serializeTask(task)));
+      if (taskBuilder.hasExecutor())  {
+        if(taskBuilder.getExecutor().getName().equals(apiConstants.AURORA_EXECUTOR_NAME)) {
+            taskBuilder.setData(ByteString.copyFrom(serializeTask(task)));
+          } else {
+          taskBuilder.setData(ByteString.copyFromUtf8(task.getTask()
+              .getExecutorConfig().getData()));
+        }
       }
+
       return taskBuilder.build();
     }
 
