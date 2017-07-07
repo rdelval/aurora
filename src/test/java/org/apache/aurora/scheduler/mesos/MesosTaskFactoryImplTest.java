@@ -44,29 +44,32 @@ import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
 import org.apache.aurora.scheduler.storage.entities.IServerInfo;
 import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
-import org.apache.mesos.Protos;
-import org.apache.mesos.Protos.CommandInfo.URI;
-import org.apache.mesos.Protos.ContainerInfo;
-import org.apache.mesos.Protos.ContainerInfo.DockerInfo;
-import org.apache.mesos.Protos.ContainerInfo.MesosInfo;
-import org.apache.mesos.Protos.ContainerInfo.Type;
-import org.apache.mesos.Protos.ExecutorInfo;
-import org.apache.mesos.Protos.Offer;
-import org.apache.mesos.Protos.Parameter;
-import org.apache.mesos.Protos.Resource;
-import org.apache.mesos.Protos.SlaveID;
-import org.apache.mesos.Protos.TaskInfo;
-import org.apache.mesos.Protos.Volume;
-import org.apache.mesos.Protos.Volume.Mode;
+import org.apache.mesos.v1.Protos;
+import org.apache.mesos.v1.Protos.AgentID;
+import org.apache.mesos.v1.Protos.CommandInfo.URI;
+import org.apache.mesos.v1.Protos.ContainerInfo;
+import org.apache.mesos.v1.Protos.ContainerInfo.DockerInfo;
+import org.apache.mesos.v1.Protos.ContainerInfo.MesosInfo;
+import org.apache.mesos.v1.Protos.ContainerInfo.Type;
+import org.apache.mesos.v1.Protos.ExecutorInfo;
+import org.apache.mesos.v1.Protos.Offer;
+import org.apache.mesos.v1.Protos.Parameter;
+import org.apache.mesos.v1.Protos.Resource;
+import org.apache.mesos.v1.Protos.TaskInfo;
+import org.apache.mesos.v1.Protos.Volume;
+import org.apache.mesos.v1.Protos.Volume.Mode;
 import org.junit.Before;
 import org.junit.Test;
 
 import static org.apache.aurora.gen.apiConstants.TASK_FILESYSTEM_MOUNT_POINT;
 import static org.apache.aurora.scheduler.base.TaskTestUtil.DEV_TIER;
+import static org.apache.aurora.scheduler.base.TaskTestUtil.PREFERRED_TIER;
+import static org.apache.aurora.scheduler.base.TaskTestUtil.PROD_TIER_NAME;
 import static org.apache.aurora.scheduler.base.TaskTestUtil.REVOCABLE_TIER;
 import static org.apache.aurora.scheduler.mesos.MesosTaskFactory.MesosTaskFactoryImpl.DEFAULT_PORT_PROTOCOL;
 import static org.apache.aurora.scheduler.mesos.MesosTaskFactory.MesosTaskFactoryImpl.METADATA_LABEL_PREFIX;
 import static org.apache.aurora.scheduler.mesos.MesosTaskFactory.MesosTaskFactoryImpl.SOURCE_LABEL;
+import static org.apache.aurora.scheduler.mesos.MesosTaskFactory.MesosTaskFactoryImpl.TIER_LABEL;
 import static org.apache.aurora.scheduler.mesos.MesosTaskFactory.MesosTaskFactoryImpl.getInstanceSourceName;
 import static org.apache.aurora.scheduler.mesos.MesosTaskFactory.MesosTaskFactoryImpl.getInverseJobSourceName;
 import static org.apache.aurora.scheduler.mesos.TaskExecutors.NO_OVERHEAD_EXECUTOR;
@@ -119,11 +122,11 @@ public class MesosTaskFactoryImplTest extends EasyMockTest {
                   TestExecutorSettings.THERMOS_TASK_PREFIX)).build(),
       false /* populate discovery info */);
 
-  private static final SlaveID SLAVE = SlaveID.newBuilder().setValue("slave-id").build();
+  private static final AgentID SLAVE = AgentID.newBuilder().setValue("slave-id").build();
   private static final Offer OFFER_THERMOS_EXECUTOR = Protos.Offer.newBuilder()
       .setId(Protos.OfferID.newBuilder().setValue("offer-id"))
       .setFrameworkId(Protos.FrameworkID.newBuilder().setValue("framework-id"))
-      .setSlaveId(SLAVE)
+      .setAgentId(SLAVE)
       .setHostname("slave-hostname")
       .addAllResources(mesosScalarFromBag(bagFromResources(
               TASK_CONFIG.getResources()).add(THERMOS_EXECUTOR.getExecutorOverhead(
@@ -367,6 +370,45 @@ public class MesosTaskFactoryImplTest extends EasyMockTest {
   }
 
   @Test
+  public void testContainerVolumes() {
+    String imageName = "some-image-name";
+    String imageTag = "some-image-tag";
+    org.apache.aurora.gen.Volume volume =
+        new org.apache.aurora.gen.Volume("container", "/host", org.apache.aurora.gen.Mode.RO);
+    IAssignedTask taskWithImageAndVolumes = IAssignedTask.build(TASK.newBuilder()
+        .setTask(
+            new TaskConfig(TASK.getTask().newBuilder()
+                .setContainer(Container.mesos(
+                    new MesosContainer()
+                        .setImage(Image.docker(new DockerImage(imageName, imageTag)))
+                        .setVolumes(ImmutableList.of(volume)))))));
+
+    expect(tierManager.getTier(taskWithImageAndVolumes.getTask())).andReturn(DEV_TIER);
+    control.replay();
+
+    taskFactory = new MesosTaskFactoryImpl(config, tierManager, SERVER_INFO);
+    TaskInfo task = taskFactory.createFrom(taskWithImageAndVolumes, OFFER_THERMOS_EXECUTOR);
+
+    assertEquals(
+        ContainerInfo.newBuilder()
+            .setType(Type.MESOS)
+            .setMesos(MesosInfo.newBuilder())
+            .addVolumes(Volume.newBuilder()
+                .setContainerPath("container")
+                .setHostPath("/host")
+                .setMode(Mode.RO))
+            .addVolumes(Volume.newBuilder()
+                .setContainerPath(TASK_FILESYSTEM_MOUNT_POINT)
+                .setImage(Protos.Image.newBuilder()
+                    .setType(Protos.Image.Type.DOCKER)
+                    .setDocker(Protos.Image.Docker.newBuilder()
+                        .setName(imageName + ":" + imageTag)))
+                .setMode(Mode.RO))
+            .build(),
+        task.getExecutor().getContainer());
+  }
+
+  @Test
   public void testMetadataLabelMapping() {
     expect(tierManager.getTier(TASK.getTask())).andReturn(DEV_TIER);
     taskFactory = new MesosTaskFactoryImpl(config, tierManager, SERVER_INFO);
@@ -375,6 +417,7 @@ public class MesosTaskFactoryImplTest extends EasyMockTest {
 
     TaskInfo task = taskFactory.createFrom(TASK, OFFER_THERMOS_EXECUTOR);
     ImmutableSet<String> labels = task.getLabels().getLabelsList().stream()
+        .filter(l -> l.getKey().startsWith(METADATA_LABEL_PREFIX))
         .map(l -> l.getKey() + l.getValue())
         .collect(GuavaUtils.toImmutableSet());
 
@@ -384,6 +427,19 @@ public class MesosTaskFactoryImplTest extends EasyMockTest {
 
     assertEquals(labels, metadata);
     checkDiscoveryInfoUnset(task);
+  }
+
+  @Test
+  public void testTierLabel() {
+    expect(tierManager.getTier(TASK.getTask())).andReturn(PREFERRED_TIER);
+    taskFactory = new MesosTaskFactoryImpl(config, tierManager, SERVER_INFO);
+
+    control.replay();
+
+    TaskInfo task = taskFactory.createFrom(TASK, OFFER_THERMOS_EXECUTOR);
+
+    assertTrue(task.getLabels().getLabelsList().stream().anyMatch(
+        l -> l.getKey().equals(TIER_LABEL) && l.getValue().equals(PROD_TIER_NAME)));
   }
 
   @Test

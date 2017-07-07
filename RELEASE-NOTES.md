@@ -1,3 +1,104 @@
+0.19.0 (unreleased)
+===================
+
+### New/updated:
+
+- Added the ability to configure the executor's stop timeout, which is the maximum amount of time
+  the executor will wait during a graceful shutdown sequence before continuing the 'Forceful
+  Termination' process (see
+  [here](http://aurora.apache.org/documentation/latest/reference/task-lifecycle/) for details).
+- Added the ability to configure the wait period after calling the graceful shutdown endpoint and
+  the shutdown endpoint using the `graceful_shutdown_wait_secs` and `shutdown_wait_secs` fields in
+  `HttpLifecycleConfig` respectively. Previously, the executor would only wait 5 seconds between
+  steps (adding up to a total of 10 seconds as there are 2 steps). The overall waiting period is
+  bounded by the executor's stop timeout, which can be configured using the executor's
+  `stop_timeout_in_secs` flag.
+- Added the `thrift_method_interceptor_modules` scheduler flag that lets cluster operators inject
+  custom Thrift method interceptors.
+
+0.18.0
+======
+
+### New/updated:
+
+- Update to Mesos 1.2.0. Please upgrade Aurora to 0.18 before upgrading Mesos to 1.2.0 if you rely
+  on Mesos filesystem images.
+- Add message parameter to `killTasks` RPC.
+- Add `prune_tasks` endpoint to `aurora_admin`. See `aurora_admin prune_tasks -h` for usage information.
+- Add support for per-task volume mounts for Mesos containers to the Aurora config DSL.
+- Added the `-mesos_driver` flag to the scheduler with three possible options:
+  `SCHEDULER_DRIVER`, `V0_MESOS`, `V1_MESOS`. The first uses the original driver
+  and the latter two use two new drivers from `libmesos`. `V0_MESOS` uses the
+  `SCHEDULER_DRIVER` under the hood and `V1_MESOS` uses a new HTTP API aware
+  driver. Users that want to use the HTTP API should use `V1_MESOS`.
+  Performance sensitive users should stick with the `SCHEDULER_DRIVER` or
+  `V0_MESOS` drivers.
+- Add observer command line options to control the resource collection interval
+  for observed tasks. See [here](docs/reference/observer-configuration.md) for details.
+- Added support for reserving agents during job updates, which can substantially reduce update times
+  in clusters with high contention for resources. Disabled by default, but can be enabled with
+  enable_update_affinity option, and the reservation timeout can be controlled via
+  update_affinity_reservation_hold_time.
+- Add `task scp` command to the CLI client for easy transferring of files to/from/between task
+  instances. See [here](docs/reference/client-commands.md#scping-with-task-machines) for details.
+  Currently only fully supported for Mesos containers (you can copy files from the Docker container
+  sandbox but you cannot send files to it).
+- Added ability to inject your own scheduling logic, via a lazy Guice module binding. This is an
+  alpha-level feature and not subject to backwards compatibility considerations. You can specify
+  your custom modules using the `task_assigner_modules` and `preemption_slot_finder_modules` options.
+- Added support for resource bin-packing via the '-offer_order' option. You can choose from `CPU`,
+  `MEMORY`, `DISK`, `RANDOM` or `REVOCABLE_CPU`. You can also compose secondary sorts by combining
+  orders together: e.g. to bin-pack by CPU and MEMORY you could supply 'CPU,MEMORY'. The current
+  default is `RANDOM`, which has the strong advantage that users can (usually) relocate their tasks
+  due to noisy neighbors or machine issues with a task restart. When you have deterministic
+  bin-packing, they may always end up on the same agent. So be careful enabling this without proper
+  monitoring and remediation of host failures.
+- Modified job update behavior to create new instances, then update existing instances, and then
+  kill unwanted instances. Previously, a job update would modify each instance in the order of
+  their instance ID.
+- Added ability to whitelist TaskStateChanges in the webhook configuration file. You can specify
+  a list of desired TaskStateChanges(represented by their task statuses) to be sent to a configured
+  endpoint.
+
+0.17.0
+======
+
+### New/updated:
+- Upgraded Mesos to 1.1.0.
+- Added a new flag `--snapshot_hydrate_stores` that controls which H2-backed stores to write fully
+  hydrated into the Scheduler snapshot. Can lead to significantly lower snapshot times for large
+  clusters if you set this flag to an empty list. Old behavior is preserved by default, but see
+  org.apache.aurora.scheduler.storage.log.SnapshotStoreImpl for which stores we currently have
+  duplicate writes for.
+- A task's tier is now mapped to a label on the Mesos `TaskInfo` proto.
+- The Aurora client is now using the Thrift binary protocol to communicate with the scheduler.
+- Introduce a new `--ip` option to bind the Thermos observer to a specific rather than all
+  interfaces.
+- Fix error that prevents the scheduler from being launched with `-enable_revocable_ram`.
+- The Aurora Scheduler API supports volume mounts per task for the Mesos
+  Containerizer if the scheduler is running with the `-allow_container_volumes`
+  flag.
+* The executor will send SIGTERM to processes that self daemonize via double forking.
+- Resolve docker tags to concrete identifiers for DockerContainerizer, so that job configuration
+  is immutable across restarts. The feature introduces a new `{{docker.image[name][tag]}}` binder that
+  can be used in the Aurora job configuration to resolve a docker image specified by its `name:tag`
+  to a concrete identifier specified by its `registry/name@digest`. It requires version 2 of the
+  Docker Registry.
+- Use `RUNNING` state to indicate that the task is healthy and behaving as expected. Job updates
+  can now rely purely on health checks rather than `watch_secs` timeout when deciding an individial
+  instance update state, by setting `watch_secs` to 0. A service will remain in `STARTING` state
+  util `min_consecutive_successes` consecutive health checks have passed.
+- The default logging output has been changed to remove line numbers and inner class information in
+  exchange for faster logging.
+- Support the deployment of the Aurora scheduler behind HTTPS-enabled reverse proxies: By launching
+  scheduler via `-serverset_endpoint_name=https` you can ensure the Aurora client will correctly
+  discover HTTPS support via the ZooKeeper-based discovery mechanism.
+- Scheduling performance has been improved by scheduling multiple tasks per scheduling round.
+- Preemption slot search logic is modified to improve its performance.
+  - Multiple reservations are made per task group per round.
+  - Multiple reservations are evaluated per round.
+- New scheduler metrics are added to facilitate monitoring and performance studies (AURORA-1832).
+
 0.16.0
 ======
 

@@ -35,7 +35,9 @@ the `Task` goes into `STARTING` state.
 `STARTING` state initializes a `Task` sandbox. When the sandbox is fully
 initialized, Thermos begins to invoke `Process`es. Also, the agent
 machine sends an update to the scheduler that the `Task` is
-in `RUNNING` state.
+in `RUNNING` state, only after the task satisfies the liveness requirements.
+See [Health Checking](../features/services#health-checking) for more details
+for how to configure health checks.
 
 
 
@@ -79,8 +81,10 @@ In any case, the responsible executor on the agent follows an escalation
 sequence when killing a running task:
 
   1. If a `HttpLifecycleConfig` is not present, skip to (4).
-  2. Send a POST to the `graceful_shutdown_endpoint` and wait 5 seconds.
-  3. Send a POST to the `shutdown_endpoint` and wait 5 seconds.
+  2. Send a POST to the `graceful_shutdown_endpoint` and wait
+  `graceful_shutdown_wait_secs` seconds.
+  3. Send a POST to the `shutdown_endpoint` and wait
+  `shutdown_wait_secs` seconds.
   4. Send SIGTERM (`kill`) and wait at most `finalization_wait` seconds.
   5. Send SIGKILL (`kill -9`).
 

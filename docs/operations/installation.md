@@ -26,6 +26,8 @@ profiles:
 A small number of machines (typically 3 or 5) responsible for cluster orchestration.  In most cases
 it is fine to co-locate these components in anything but very large clusters (> 1000 machines).
 Beyond that point, operators will likely want to manage these services on separate machines.
+In particular, you will want to use separate ZooKeeper ensembles for leader election and
+service discovery. Otherwise a service discovery error or outage can take down the entire cluster.
 
 In practice, 5 coordinators have been shown to reliably manage clusters with tens of thousands of
 machines.
@@ -61,8 +63,8 @@ Any machines that users submit jobs from.
 
         sudo update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
 
-        wget -c https://apache.bintray.com/aurora/ubuntu-trusty/aurora-scheduler_0.15.0_amd64.deb
-        sudo dpkg -i aurora-scheduler_0.15.0_amd64.deb
+        wget -c https://apache.bintray.com/aurora/ubuntu-trusty/aurora-scheduler_0.17.0_amd64.deb
+        sudo dpkg -i aurora-scheduler_0.17.0_amd64.deb
 
 ### CentOS 7
 
@@ -83,8 +85,8 @@ Any machines that users submit jobs from.
 
         sudo yum install -y wget
 
-        wget -c https://apache.bintray.com/aurora/centos-7/aurora-scheduler-0.15.0-1.el7.centos.aurora.x86_64.rpm
-        sudo yum install -y aurora-scheduler-0.15.0-1.el7.centos.aurora.x86_64.rpm
+        wget -c https://apache.bintray.com/aurora/centos-7/aurora-scheduler-0.17.0-1.el7.centos.aurora.x86_64.rpm
+        sudo yum install -y aurora-scheduler-0.17.0-1.el7.centos.aurora.x86_64.rpm
 
 ### Finalizing
 By default, the scheduler will start in an uninitialized mode.  This is because external
@@ -123,8 +125,8 @@ CentOS: `sudo systemctl start aurora`
         # for the python mesos native bindings.
         sudo apt-get -y install libcurl4-nss-dev
 
-        wget -c https://apache.bintray.com/aurora/ubuntu-trusty/aurora-executor_0.15.0_amd64.deb
-        sudo dpkg -i aurora-executor_0.15.0_amd64.deb
+        wget -c https://apache.bintray.com/aurora/ubuntu-trusty/aurora-executor_0.17.0_amd64.deb
+        sudo dpkg -i aurora-executor_0.17.0_amd64.deb
 
 ### CentOS 7
 
@@ -137,10 +139,10 @@ CentOS: `sudo systemctl start aurora`
 
         sudo yum install -y python2 wget
 
-        wget -c https://apache.bintray.com/aurora/centos-7/aurora-executor-0.15.0-1.el7.centos.aurora.x86_64.rpm
-        sudo yum install -y aurora-executor-0.15.0-1.el7.centos.aurora.x86_64.rpm
+        wget -c https://apache.bintray.com/aurora/centos-7/aurora-executor-0.17.0-1.el7.centos.aurora.x86_64.rpm
+        sudo yum install -y aurora-executor-0.17.0-1.el7.centos.aurora.x86_64.rpm
 
-### Configuration
+### Worker Configuration
 The executor typically does not require configuration.  Command line arguments can
 be passed to the executor using a command line argument on the scheduler.
 
@@ -194,27 +196,28 @@ Make an edit to add the `--mesos-root` flag resulting in something like:
       --log_to_stderr=google:INFO
     )
 
+
 ## Installing the client
 ### Ubuntu Trusty
 
     sudo apt-get install -y python2.7 wget
 
-    wget -c https://apache.bintray.com/aurora/ubuntu-trusty/aurora-tools_0.15.0_amd64.deb
-    sudo dpkg -i aurora-tools_0.15.0_amd64.deb
+    wget -c https://apache.bintray.com/aurora/ubuntu-trusty/aurora-tools_0.17.0_amd64.deb
+    sudo dpkg -i aurora-tools_0.17.0_amd64.deb
 
 ### CentOS 7
 
     sudo yum install -y python2 wget
 
-    wget -c https://apache.bintray.com/aurora/centos-7/aurora-tools-0.15.0-1.el7.centos.aurora.x86_64.rpm
-    sudo yum install -y aurora-tools-0.15.0-1.el7.centos.aurora.x86_64.rpm
+    wget -c https://apache.bintray.com/aurora/centos-7/aurora-tools-0.17.0-1.el7.centos.aurora.x86_64.rpm
+    sudo yum install -y aurora-tools-0.17.0-1.el7.centos.aurora.x86_64.rpm
 
 ### Mac OS X
 
     brew upgrade
     brew install aurora-cli
 
-### Configuration
+### Client Configuration
 Client configuration lives in a json file that describes the clusters available and how to reach
 them.  By default this file is at `/etc/aurora/clusters.json`.
 
@@ -239,74 +242,15 @@ are identical for both.
     sudo apt-get -y update
 
     # Use `apt-cache showpkg mesos | grep [version]` to find the exact version.
-    sudo apt-get -y install mesos=0.28.2-2.0.27.ubuntu1404_amd64
+    sudo apt-get -y install mesos=1.1.0-2.0.107.ubuntu1404_amd64.deb
 
 ### Mesos on CentOS 7
 
     sudo rpm -Uvh https://repos.mesosphere.io/el/7/noarch/RPMS/mesosphere-el-repo-7-1.noarch.rpm
-    sudo yum -y install mesos-0.28.2
-
+    sudo yum -y install mesos-1.1.0
 
 
 ## Troubleshooting
+
 So you've started your first cluster and are running into some issues? We've collected some common
-stumbling blocks and solutions here to help get you moving.
-
-### Replicated log not initialized
-
-#### Symptoms
-- Scheduler RPCs and web interface claim `Storage is not READY`
-- Scheduler log repeatedly prints messages like
-
-  ```
-  I1016 16:12:27.234133 26081 replica.cpp:638] Replica in EMPTY status
-  received a broadcasted recover request
-  I1016 16:12:27.234256 26084 recover.cpp:188] Received a recover response
-  from a replica in EMPTY status
-  ```
-
-#### Solution
-When you create a new cluster, you need to inform a quorum of schedulers that they are safe to
-consider their database to be empty by [initializing](#finalizing) the
-replicated log. This is done to prevent the scheduler from modifying the cluster state in the event
-of multiple simultaneous disk failures or, more likely, misconfiguration of the replicated log path.
-
-
-### Scheduler not registered
-
-#### Symptoms
-Scheduler log contains
-
-    Framework has not been registered within the tolerated delay.
-
-#### Solution
-Double-check that the scheduler is configured correctly to reach the Mesos master. If you are registering
-the master in ZooKeeper, make sure command line argument to the master:
-
-    --zk=zk://$ZK_HOST:2181/mesos/master
-
-is the same as the one on the scheduler:
-
-    -mesos_master_address=zk://$ZK_HOST:2181/mesos/master
-
-
-### Scheduler not running
-
-### Symptom
-The scheduler process commits suicide regularly. This happens under error conditions, but
-also on purpose in regular intervals.
-
-## Solution
-Aurora is meant to be run under supervision. You have to configure a supervisor like
-[Monit](http://mmonit.com/monit/) or [supervisord](http://supervisord.org/) to run the scheduler
-and restart it whenever it fails or exists on purpose.
-
-Aurora supports an active health checking protocol on its admin HTTP interface - if a `GET /health`
-times out or returns anything other than `200 OK` the scheduler process is unhealthy and should be
-restarted.
-
-For example, monit can be configured with
-
-    if failed port 8081 send "GET /health HTTP/1.0\r\n" expect "OK\n" with timeout 2 seconds for 10 cycles then restart
-
-assuming you set `-http_port=8081`.
+stumbling blocks and solutions in our [Troubleshooting guide](troubleshooting.md) to help get you moving.

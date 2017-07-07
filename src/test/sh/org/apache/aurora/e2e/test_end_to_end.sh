@@ -33,10 +33,12 @@ _curl() { curl --silent --fail --retry 4 --retry-delay 10 "$@" ; }
 tear_down() {
   set +x  # Disable command echo, as this makes it more difficult see which command failed.
 
-  for job in http_example http_example_revocable http_example_docker http_example_unified_appc http_example_unified_docker; do
-    aurora update abort devcluster/vagrant/test/$job || true >/dev/null 2>&1
+  for job in http_example http_example_watch_secs http_example_revocable http_example_docker http_example_unified_appc http_example_unified_docker; do
+    aurora update abort devcluster/vagrant/test/$job >/dev/null 2>&1 || true
     aurora job killall --no-batching devcluster/vagrant/test/$job >/dev/null 2>&1
   done
+
+  sudo mv /etc/aurora/clusters.json.old /etc/aurora/clusters.json >/dev/null 2>&1 || true
 }
 
 collect_result() {
@@ -45,9 +47,9 @@ collect_result() {
     echo "OK (all tests passed)"
   else
     echo "!!! FAIL (something returned non-zero) for $BASH_COMMAND"
-    # Attempt to clean up any state we left behind.
-    tear_down
   fi
+  # Attempt to clean up any state we left behind.
+  tear_down
   exit $RETCODE
 }
 
@@ -58,7 +60,7 @@ check_url_live() {
 test_file_removed() {
   local _file=$1
   local _success=0
-  for i in $(seq 1 10); do
+  for i in {1..10}; do
     if [[ ! -e $_file ]]; then
       _success=1
       break
@@ -66,7 +68,7 @@ test_file_removed() {
     sleep 1
   done
 
-  if [[ "$_success" -ne "1" ]]; then
+  if [[ $_success -ne 1 ]]; then
     echo "File was not removed."
     exit 1
   fi
@@ -77,8 +79,59 @@ test_version() {
   [[ $(aurora --version 2>&1) = $(cat /vagrant/.auroraversion) ]]
 }
 
+clear_mesos_maintenance() {
+  curl http://"$TEST_SLAVE_IP":5050/maintenance/schedule \
+    -H "Content-type: application/json" \
+    -X POST \
+    -d "{}"
+}
+
+test_mesos_maintenance() {
+  local _cluster=$1 _role=$2 _env=$3
+  local _base_config=$4
+  local _job=$7
+  local _jobkey="$_cluster/$_role/$_env/$_job"
+
+  # Clear any previous maintenance schedules before running this test.
+  clear_mesos_maintenance
+
+  test_create $_jobkey $_base_config
+
+  echo "Waiting job to enter RUNNING..."
+  wait_until_task_status $_jobkey "0" "RUNNING"
+
+  # Create the maintenance schedule
+  MAINTENANCE_SCHEDULE="/tmp/maintenance_schedule.json"
+  python \
+  /vagrant/src/test/sh/org/apache/aurora/e2e/generate_mesos_maintenance_schedule.py > "$MAINTENANCE_SCHEDULE"
+  echo "Creating maintenance with schedule"
+  cat $MAINTENANCE_SCHEDULE | jq .
+
+  curl http://"$TEST_SLAVE_IP":5050/maintenance/schedule \
+    -H "Content-type: application/json" \
+    -X POST \
+    -d @"$MAINTENANCE_SCHEDULE"
+
+  trap clear_mesos_maintenance EXIT
+
+  # Posting of a maintenance schedule should not cause the task to drain right
+  # away.
+  assert_task_status $_jobkey "0" "RUNNING"
+
+  # When it is drain time, it should be killed.
+  echo "Waiting for time to drain tasks..."
+  wait_until_task_status $_jobkey "0" "PENDING"
+
+  clear_mesos_maintenance
+
+  echo "Waiting for drained task to re-launch..."
+  wait_until_task_status $_jobkey "0" "RUNNING"
+
+  test_kill $_jobkey
+}
+
 test_health_check() {
-  [[ $(_curl "localhost:8081/health") == 'OK' ]]
+  [[ $(_curl "$TEST_SLAVE_IP:8081/health") == 'OK' ]]
 }
 
 test_config() {
@@ -117,7 +170,7 @@ test_scheduler_ui() {
   local _role=$1 _env=$2 _job=$3
 
   # Check that scheduler UI pages shown
-  base_url="localhost:8081"
+  base_url="$TEST_SLAVE_IP:8081"
   check_url_live "$base_url/leaderhealth"
   check_url_live "$base_url/scheduler"
   check_url_live "$base_url/scheduler/$_role"
@@ -128,7 +181,7 @@ test_observer_ui() {
   local _cluster=$1 _role=$2 _job=$3
 
   # Check the observer page
-  observer_url="localhost:1338"
+  observer_url="$TEST_SLAVE_IP:1338"
   check_url_live "$observer_url"
 
   # Poll the observer, waiting for it to receive and show information about the task.
@@ -161,6 +214,39 @@ assert_update_state() {
   local _state=$(aurora update list $_jobkey --status active | tail -n +2 | awk '{print $3}')
   if [[ $_state != $_expected_state ]]; then
     echo "Expected update to be in state $_expected_state, but found $_state"
+    exit 1
+  fi
+}
+
+assert_task_status() {
+  local _jobkey=$1 _id=$2 _expected_state=$3
+
+  local _state=$(aurora job status $_jobkey --write-json | jq -r ".[0].active[$_id].status")
+
+  if [[ $_state != $_expected_state ]]; then
+    echo "Expected task to be in state $_expected_state, but found $_state"
+    exit 1
+  fi
+}
+
+wait_until_task_status() {
+  # Poll the task, waiting for it to enter the target state
+  local _jobkey=$1 _id=$2 _expected_state=$3
+  local _state=""
+  local _success=0
+
+  for i in $(seq 1 120); do
+    _state=$(aurora job status $_jobkey --write-json | jq -r ".[0].active[$_id].status")
+    if [[ $_state == $_expected_state ]]; then
+      _success=1
+      break
+    else
+      sleep 1
+    fi
+  done
+
+  if [[ "$_success" -ne "1" ]]; then
+    echo "Task did not transition to $_expected_state within two minutes."
     exit 1
   fi
 }
@@ -265,11 +351,62 @@ test_run() {
   [[ "$sandbox_contents" = "      3 .logs" ]]
 }
 
+test_scp_success() {
+  local _jobkey=$1/0
+  local _filename=scp_success.txt
+  local _expected_return="      1 scp_success.txt"
+
+  # Unset because grep can return 1 if the file does not exist
+  set +e
+
+  # Ensure file does not exists before scp
+  pre_sandbox_contents=$(aurora task run $_jobkey "ls" | awk '{print $2}' | grep ${_filename} | sort | uniq -c)
+  [[ "$pre_sandbox_contents" != $_expected_return ]]
+
+  # Reset -e after command has been run
+  set -e
+
+  # Create a file and move it to the sandbox of a job
+  touch $_filename
+  aurora task scp $_filename ${_jobkey}:
+  sandbox_contents=$(aurora task run $_jobkey "ls" | awk '{print $2}' | grep ${_filename} | sort | uniq -c)
+  [[ "$sandbox_contents" == $_expected_return ]]
+}
+
+test_scp_permissions() {
+  local _jobkey=$1/0
+  local _filename=scp_fail_permission.txt
+  local _retcode=0
+  local _sandbox_contents
+  # Create a file and try to move it, ensure we get permission denied
+  touch $_filename
+
+  # Unset because we are expecting an error
+  set +e
+
+  _sandbox_contents=$(aurora task scp $_filename ${_jobkey}:../ 2>&1 > /dev/null)
+  _retcode=$?
+
+  # Reset -e after command has been run
+  set -e
+
+  if [[ "$_retcode" != 1 ]]; then
+    echo "Permission to exit chroot jail given when should have failed"
+    exit 1
+  fi
+  if [[ "$_sandbox_contents" != *"../scp_fail_permission.txt: Permission denied"* ]]; then
+    echo "Unexpected response from invalid scp command"
+    exit 1
+  fi
+}
+
 test_kill() {
   local _jobkey=$1
+  shift 1
+  local _extra_args="${@}"
 
-  aurora job kill $_jobkey/1
-  aurora job killall $_jobkey
+  aurora job kill $_jobkey/1 $_extra_args
+  aurora job killall $_jobkey $_extra_args
 }
 
 test_quota() {
@@ -344,6 +481,7 @@ test_http_example() {
   test_observer_ui $_cluster $_role $_job
   test_discovery_info $_task_id_prefix $_discovery_name
   test_thermos_profile $_jobkey
+  test_file_mount $_cluster $_role $_env $_job
   test_restart $_jobkey
   test_update $_jobkey $_updated_config $_cluster $_bind_parameters
   test_update_fail $_jobkey $_base_config  $_cluster $_bad_healthcheck_config $_bind_parameters
@@ -351,6 +489,13 @@ test_http_example() {
   test_update $_jobkey $_updated_config $_cluster $_bind_parameters
   test_announce $_role $_env $_job
   test_run $_jobkey
+  # TODO(AURORA-1926): 'aurora task scp' only works fully on Mesos containers (can only read for
+  # Docker). See if it is possible to enable write for Docker sandboxes as well then remove the
+  # 'if' guard below.
+  if [[ $_job != *"docker"* ]]; then
+    test_scp_success $_jobkey
+    test_scp_permissions $_jobkey
+  fi
   test_kill $_jobkey
   test_quota $_cluster $_role
 }
@@ -389,6 +534,19 @@ test_ephemeral_daemon_with_final() {
   test_job_status $_cluster $_role $_env $_job
   touch $_stop_file  # Stops 'main_process'.
   test_file_removed $_stop_file  # Removed by 'final_process'.
+}
+
+test_daemonizing_process() {
+  local _cluster=$1 _role=$2 _env=$3 _job=$4 _config=$5
+  local _jobkey="$_cluster/$_role/$_env/$_job"
+  local _term_file=$(mktemp)
+  local _extra_args="--bind term_file=$_term_file"
+
+  test_create $_jobkey $_config $_extra_args
+  test_observer_ui $_cluster $_role $_job
+  test_job_status $_cluster $_role $_env $_job
+  test_kill $_jobkey
+  test_file_removed $_term_file
 }
 
 restore_netrc() {
@@ -440,6 +598,16 @@ setup_image_stores() {
   rm -rf "$TEMP_PATH"
 }
 
+setup_docker_registry() {
+  # build the test docker image
+  sudo docker build -t http_example -f "${TEST_ROOT}/Dockerfile.python" ${TEST_ROOT}
+  docker tag http_example:latest aurora.local:5000/http_example:latest
+  docker login -p testpassword -u testuser http://aurora.local:5000
+  docker push aurora.local:5000/http_example:latest
+  sudo mv /etc/aurora/clusters.json /etc/aurora/clusters.json.old
+  sudo sh -c "cat /etc/aurora/clusters.json.old | jq 'map(. + {docker_registry:\"http://aurora.local:5000\"})' > /etc/aurora/clusters.json"
+}
+
 test_appc_unified() {
   num_mounts_before=$(mount |wc -l |tr -d '\n')
 
@@ -449,6 +617,21 @@ test_appc_unified() {
   num_mounts_after=$(mount |wc -l |tr -d '\n')
   # We want to be sure that running the isolated task did not leak any mounts.
   [[ "$num_mounts_before" = "$num_mounts_after" ]]
+}
+
+test_file_mount() {
+  local _cluster=$1 _role=$2 _env=$3 _job=$4
+
+  if [[ "$_job" = "$TEST_JOB_UNIFIED_DOCKER" ]]; then
+    local _jobkey="$_cluster/$_role/$_env/$_job"
+
+    verify_file_mount_output=$(aurora task ssh $_jobkey/0 --command='tail -1 .logs/verify_file_mount/0/stdout' |tr -d '\r\n' 2>/dev/null)
+    echo "$verify_file_mount_output"
+    [[ "$verify_file_mount_output" = "$(cat /vagrant/.auroraversion |tr -d '\r\n')" ]]
+    return $?
+  fi
+
+  return 0
 }
 
 test_docker_unified() {
@@ -471,6 +654,8 @@ TEST_CLUSTER=devcluster
 TEST_ROLE=vagrant
 TEST_ENV=test
 TEST_JOB=http_example
+TEST_MAINTENANCE_JOB=http_example_maintenance
+TEST_JOB_WATCH_SECS=http_example_watch_secs
 TEST_JOB_REVOCABLE=http_example_revocable
 TEST_JOB_GPU=http_example_gpu
 TEST_JOB_DOCKER=http_example_docker
@@ -481,6 +666,8 @@ TEST_CONFIG_UPDATED_FILE=$EXAMPLE_DIR/http_example_updated.aurora
 TEST_BAD_HEALTHCHECK_CONFIG_UPDATED_FILE=$EXAMPLE_DIR/http_example_bad_healthcheck.aurora
 TEST_EPHEMERAL_DAEMON_WITH_FINAL_JOB=ephemeral_daemon_with_final
 TEST_EPHEMERAL_DAEMON_WITH_FINAL_CONFIG_FILE=$TEST_ROOT/ephemeral_daemon_with_final.aurora
+TEST_DAEMONIZING_PROCESS_JOB=daemonize
+TEST_DAEMONIZING_PROCESS_CONFIG_FILE=$TEST_ROOT/test_daemonizing_process.aurora
 
 BASE_ARGS=(
   $TEST_CLUSTER
@@ -492,6 +679,10 @@ BASE_ARGS=(
 )
 
 TEST_JOB_ARGS=("${BASE_ARGS[@]}" "$TEST_JOB")
+
+TEST_MAINTENANCE_JOB_ARGS=("${BASE_ARGS[@]}" "$TEST_MAINTENANCE_JOB")
+
+TEST_JOB_WATCH_SECS_ARGS=("${BASE_ARGS[@]}" "$TEST_JOB_WATCH_SECS")
 
 TEST_JOB_REVOCABLE_ARGS=("${BASE_ARGS[@]}" "$TEST_JOB_REVOCABLE")
 
@@ -509,21 +700,35 @@ TEST_JOB_EPHEMERAL_DAEMON_WITH_FINAL_ARGS=(
   $TEST_EPHEMERAL_DAEMON_WITH_FINAL_CONFIG_FILE
 )
 
+TEST_DAEMONIZING_PROCESS_ARGS=(
+  $TEST_CLUSTER
+  $TEST_ROLE
+  $TEST_ENV
+  $TEST_DAEMONIZING_PROCESS_JOB
+  $TEST_DAEMONIZING_PROCESS_CONFIG_FILE
+)
+
+TEST_JOB_KILL_MESSAGE_ARGS=("${TEST_JOB_ARGS[@]}" "--message='Test message'")
+
 trap collect_result EXIT
 
 aurorabuild all
 setup_ssh
+setup_docker_registry
 
 test_version
 test_http_example "${TEST_JOB_ARGS[@]}"
+test_http_example "${TEST_JOB_WATCH_SECS_ARGS[@]}"
 test_health_check
+
+test_mesos_maintenance "${TEST_MAINTENANCE_JOB_ARGS[@]}"
 
 test_http_example_basic "${TEST_JOB_REVOCABLE_ARGS[@]}"
 
 test_http_example_basic "${TEST_JOB_GPU_ARGS[@]}"
 
-# build the test docker image
-sudo docker build -t http_example -f "${TEST_ROOT}/Dockerfile.python" ${TEST_ROOT}
+test_http_example_basic "${TEST_JOB_KILL_MESSAGE_ARGS[@]}"
+
 test_http_example "${TEST_JOB_DOCKER_ARGS[@]}"
 
 setup_image_stores
@@ -534,6 +739,8 @@ test_admin "${TEST_ADMIN_ARGS[@]}"
 test_basic_auth_unauthenticated  "${TEST_JOB_ARGS[@]}"
 
 test_ephemeral_daemon_with_final "${TEST_JOB_EPHEMERAL_DAEMON_WITH_FINAL_ARGS[@]}"
+
+test_daemonizing_process "${TEST_DAEMONIZING_PROCESS_ARGS[@]}"
 
 /vagrant/src/test/sh/org/apache/aurora/e2e/test_kerberos_end_to_end.sh
 /vagrant/src/test/sh/org/apache/aurora/e2e/test_bypass_leader_redirect_end_to_end.sh

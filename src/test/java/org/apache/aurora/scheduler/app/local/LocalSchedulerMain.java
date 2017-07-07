@@ -32,12 +32,13 @@ import org.apache.aurora.scheduler.app.SchedulerMain;
 import org.apache.aurora.scheduler.app.local.simulator.ClusterSimulatorModule;
 import org.apache.aurora.scheduler.mesos.DriverFactory;
 import org.apache.aurora.scheduler.mesos.DriverSettings;
+import org.apache.aurora.scheduler.mesos.FrameworkInfoFactory;
 import org.apache.aurora.scheduler.storage.DistributedSnapshotStore;
 import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.Storage.NonVolatileStorage;
 import org.apache.aurora.scheduler.storage.log.SnapshotStoreImpl;
-import org.apache.mesos.Protos;
 import org.apache.mesos.SchedulerDriver;
+import org.apache.mesos.v1.Protos;
 import org.apache.shiro.io.ResourceUtils;
 
 /**
@@ -48,13 +49,13 @@ public final class LocalSchedulerMain {
     // Utility class.
   }
 
-  private static final DriverSettings DRIVER_SETTINGS = new DriverSettings(
-      "fakemaster",
-      Optional.absent(),
-      Protos.FrameworkInfo.newBuilder()
+  private static final Protos.FrameworkInfo BASE_FRAMEWORK_INFO = Protos.FrameworkInfo.newBuilder()
           .setUser("framework user")
           .setName("test framework")
-          .build());
+          .build();
+  private static final DriverSettings DRIVER_SETTINGS = new DriverSettings(
+      "fakemaster",
+      Optional.absent());
 
   public static void main(String[] args) {
     File backupDir = Files.createTempDir();
@@ -96,6 +97,11 @@ public final class LocalSchedulerMain {
         bind(SchedulerDriver.class).to(FakeMaster.class);
         bind(DriverFactory.class).to(FakeMaster.class);
         bind(FakeMaster.class).in(Singleton.class);
+        bind(Protos.FrameworkInfo.class)
+            .annotatedWith(FrameworkInfoFactory.FrameworkInfoFactoryImpl.BaseFrameworkInfo.class)
+            .toInstance(BASE_FRAMEWORK_INFO);
+        bind(FrameworkInfoFactory.class).to(FrameworkInfoFactory.FrameworkInfoFactoryImpl.class);
+        bind(FrameworkInfoFactory.FrameworkInfoFactoryImpl.class).in(Singleton.class);
         install(new ClusterSimulatorModule());
       }
     };

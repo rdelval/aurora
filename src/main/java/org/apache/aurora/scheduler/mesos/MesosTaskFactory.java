@@ -15,7 +15,6 @@ package org.apache.aurora.scheduler.mesos;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import javax.inject.Inject;
@@ -23,11 +22,9 @@ import javax.inject.Inject;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.protobuf.ByteString;
 
-import org.apache.aurora.GuavaUtils;
 import org.apache.aurora.Protobufs;
 import org.apache.aurora.codec.ThriftBinaryCodec;
 import org.apache.aurora.scheduler.TierManager;
@@ -45,22 +42,21 @@ import org.apache.aurora.scheduler.storage.entities.IDockerImage;
 import org.apache.aurora.scheduler.storage.entities.IImage;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
 import org.apache.aurora.scheduler.storage.entities.IMesosContainer;
-import org.apache.aurora.scheduler.storage.entities.IMetadata;
 import org.apache.aurora.scheduler.storage.entities.IServerInfo;
 import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
-import org.apache.mesos.Protos;
-import org.apache.mesos.Protos.CommandInfo;
-import org.apache.mesos.Protos.ContainerInfo;
-import org.apache.mesos.Protos.DiscoveryInfo;
-import org.apache.mesos.Protos.ExecutorID;
-import org.apache.mesos.Protos.ExecutorInfo;
-import org.apache.mesos.Protos.Label;
-import org.apache.mesos.Protos.Labels;
-import org.apache.mesos.Protos.Offer;
-import org.apache.mesos.Protos.Port;
-import org.apache.mesos.Protos.Resource;
-import org.apache.mesos.Protos.TaskID;
-import org.apache.mesos.Protos.TaskInfo;
+import org.apache.mesos.v1.Protos;
+import org.apache.mesos.v1.Protos.CommandInfo;
+import org.apache.mesos.v1.Protos.ContainerInfo;
+import org.apache.mesos.v1.Protos.DiscoveryInfo;
+import org.apache.mesos.v1.Protos.ExecutorID;
+import org.apache.mesos.v1.Protos.ExecutorInfo;
+import org.apache.mesos.v1.Protos.Label;
+import org.apache.mesos.v1.Protos.Labels;
+import org.apache.mesos.v1.Protos.Offer;
+import org.apache.mesos.v1.Protos.Port;
+import org.apache.mesos.v1.Protos.Resource;
+import org.apache.mesos.v1.Protos.TaskID;
+import org.apache.mesos.v1.Protos.TaskInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,15 +83,21 @@ public interface MesosTaskFactory {
   class MesosTaskFactoryImpl implements MesosTaskFactory {
     private static final Logger LOG = LoggerFactory.getLogger(MesosTaskFactoryImpl.class);
 
+    private static final String AURORA_LABEL_PREFIX = "org.apache.aurora";
+
     @VisibleForTesting
-    //static final String METADATA_LABEL_PREFIX = "org.apache.aurora.metadata.";
-    static final String METADATA_LABEL_PREFIX = "";
+    static final String METADATA_LABEL_PREFIX = AURORA_LABEL_PREFIX + ".metadata.";
 
     @VisibleForTesting
     static final String DEFAULT_PORT_PROTOCOL = "TCP";
 
+    // N.B. We intentionally do not prefix this label. It was added when the explicit source field
+    // was removed from the ExecutorInfo proto and named "source" per guidance from Mesos devs.
     @VisibleForTesting
     static final String SOURCE_LABEL = "source";
+
+    @VisibleForTesting
+    static final String TIER_LABEL = AURORA_LABEL_PREFIX + ".tier";
 
     private final ExecutorSettings executorSettings;
     private final TierManager tierManager;
@@ -118,7 +120,7 @@ public interface MesosTaskFactory {
     }
 
     private static String getJobSourceName(IJobKey jobkey) {
-      return String.format("%s.%s.%s", jobkey.getRole(), jobkey.getEnvironment(), jobkey.getName());
+      return String.join(".", jobkey.getRole(), jobkey.getEnvironment(), jobkey.getName());
     }
 
     private static String getJobSourceName(ITaskConfig task) {
@@ -131,12 +133,12 @@ public interface MesosTaskFactory {
 
     @VisibleForTesting
     static String getInstanceSourceName(ITaskConfig task, int instanceId) {
-      return String.format("%s.%s", getJobSourceName(task), instanceId);
+      return String.join(".", getJobSourceName(task), Integer.toString(instanceId));
     }
 
     @VisibleForTesting
     static String getInverseJobSourceName(IJobKey job) {
-      return String.format("%s.%s.%s", job.getName(), job.getEnvironment(), job.getRole());
+      return String.join(".", job.getName(), job.getEnvironment(), job.getRole());
     }
 
     private static byte[] serializeTask(IAssignedTask task) throws SchedulerException {
@@ -175,17 +177,19 @@ public interface MesosTaskFactory {
       }
       Iterable<Resource> resources = acceptedOffer.getTaskResources();
 
-      LOG.debug(
-          "Setting task resources to {}",
-          Iterables.transform(resources, Protobufs::toString));
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(
+            "Setting task resources to {}",
+            Iterables.transform(resources, Protobufs::toString));
+      }
 
       TaskInfo.Builder taskBuilder = TaskInfo.newBuilder()
           .setName(JobKeys.canonicalString(Tasks.getJob(task)))
           .setTaskId(TaskID.newBuilder().setValue(task.getTaskId()))
-          .setSlaveId(offer.getSlaveId())
+          .setAgentId(offer.getAgentId())
           .addAllResources(resources);
 
-      configureTaskLabels(config.getMetadata(), taskBuilder);
+      configureTaskLabels(config, taskBuilder);
 
       if (executorSettings.shouldPopulateDiscoverInfo()) {
         configureDiscoveryInfos(task, taskBuilder);
@@ -256,6 +260,13 @@ public interface MesosTaskFactory {
         ContainerInfo.MesosInfo.Builder mesosContainerBuilder =
             ContainerInfo.MesosInfo.newBuilder();
 
+        Iterable<Protos.Volume> containerVolumes = Iterables.transform(mesosContainer.getVolumes(),
+            input -> Protos.Volume.newBuilder()
+            .setMode(Protos.Volume.Mode.valueOf(input.getMode().name()))
+            .setHostPath(input.getHostPath())
+            .setContainerPath(input.getContainerPath())
+            .build());
+
         Protos.Volume volume = Protos.Volume.newBuilder()
             .setImage(imageBuilder)
             .setContainerPath(TASK_FILESYSTEM_MOUNT_POINT)
@@ -266,6 +277,7 @@ public interface MesosTaskFactory {
             .setType(ContainerInfo.Type.MESOS)
             .setMesos(mesosContainerBuilder)
             .addAllVolumes(executorSettings.getExecutorConfig(executorName).get().getVolumeMounts())
+            .addAllVolumes(containerVolumes)
             .addVolumes(volume));
       }
 
@@ -324,24 +336,25 @@ public interface MesosTaskFactory {
       builder.setCommand(builder.getCommand().toBuilder().addAllUris(mesosFetcherUris));
 
       Iterable<Resource> executorResources = acceptedOffer.getExecutorResources();
-      LOG.debug(
-          "Setting executor resources to {}",
-          Iterables.transform(executorResources, Protobufs::toString));
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(
+            "Setting executor resources to {}",
+            Iterables.transform(executorResources, Protobufs::toString));
+      }
       builder.clearResources().addAllResources(executorResources);
       return builder;
     }
 
-    private void configureTaskLabels(Set<IMetadata> metadata, TaskInfo.Builder taskBuilder) {
-      ImmutableSet<Label> labels = metadata.stream()
-          .map(m -> Label.newBuilder()
-              .setKey(METADATA_LABEL_PREFIX + m.getKey())
-              .setValue(m.getValue())
-              .build())
-          .collect(GuavaUtils.toImmutableSet());
+    private void configureTaskLabels(ITaskConfig config, TaskInfo.Builder taskBuilder) {
+      Labels.Builder labelsBuilder = Labels.newBuilder();
+      labelsBuilder.addLabels(Label.newBuilder().setKey(TIER_LABEL).setValue(config.getTier()));
 
-      if (!labels.isEmpty()) {
-        taskBuilder.setLabels(Labels.newBuilder().addAllLabels(labels));
-      }
+      config.getMetadata().stream().forEach(m -> labelsBuilder.addLabels(Label.newBuilder()
+          .setKey(METADATA_LABEL_PREFIX + m.getKey())
+          .setValue(m.getValue())
+          .build()));
+
+      taskBuilder.setLabels(labelsBuilder);
     }
 
     private void configureDiscoveryInfos(IAssignedTask task, TaskInfo.Builder taskBuilder) {

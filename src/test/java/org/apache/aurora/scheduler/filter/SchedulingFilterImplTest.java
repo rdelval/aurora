@@ -13,15 +13,20 @@
  */
 package org.apache.aurora.scheduler.filter;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Set;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 
+import org.apache.aurora.common.quantity.Amount;
+import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.testing.easymock.EasyMockTest;
+import org.apache.aurora.common.util.testing.FakeClock;
 import org.apache.aurora.gen.Attribute;
 import org.apache.aurora.gen.Constraint;
 import org.apache.aurora.gen.ExecutorConfig;
@@ -53,7 +58,7 @@ import static org.apache.aurora.gen.Resource.diskMb;
 import static org.apache.aurora.gen.Resource.numCpus;
 import static org.apache.aurora.gen.Resource.ramMb;
 import static org.apache.aurora.scheduler.configuration.ConfigurationManager.DEDICATED_ATTRIBUTE;
-import static org.apache.aurora.scheduler.filter.AttributeAggregate.EMPTY;
+import static org.apache.aurora.scheduler.filter.AttributeAggregate.empty;
 import static org.apache.aurora.scheduler.resources.ResourceManager.bagFromMesosResources;
 import static org.apache.aurora.scheduler.resources.ResourceTestUtil.mesosRange;
 import static org.apache.aurora.scheduler.resources.ResourceTestUtil.mesosScalar;
@@ -87,11 +92,13 @@ public class SchedulingFilterImplTest extends EasyMockTest {
       mesosScalar(DISK_MB, DEFAULT_DISK),
       mesosRange(PORTS, 80, 81)));
 
+  private static final Amount<Long, Time> UNAVAILABILITY_THRESHOLD = Amount.of(2L, Time.MINUTES);
+  private final FakeClock clock = new FakeClock();
   private SchedulingFilter defaultFilter;
 
   @Before
   public void setUp() {
-    defaultFilter = new SchedulingFilterImpl();
+    defaultFilter = new SchedulingFilterImpl(UNAVAILABILITY_THRESHOLD, clock);
   }
 
   @Test
@@ -128,22 +135,22 @@ public class SchedulingFilterImplTest extends EasyMockTest {
         none,
         defaultFilter.filter(
             new UnusedResource(DEFAULT_OFFER, hostA),
-            new ResourceRequest(noPortTask, bag(noPortTask), EMPTY)));
+            new ResourceRequest(noPortTask, bag(noPortTask), empty())));
     assertEquals(
         none,
         defaultFilter.filter(
             new UnusedResource(DEFAULT_OFFER, hostA),
-            new ResourceRequest(onePortTask, bag(onePortTask), EMPTY)));
+            new ResourceRequest(onePortTask, bag(onePortTask), empty())));
     assertEquals(
         none,
         defaultFilter.filter(
             new UnusedResource(DEFAULT_OFFER, hostA),
-            new ResourceRequest(twoPortTask, bag(twoPortTask), EMPTY)));
+            new ResourceRequest(twoPortTask, bag(twoPortTask), empty())));
     assertEquals(
         ImmutableSet.of(veto(PORTS, 1)),
         defaultFilter.filter(
             new UnusedResource(DEFAULT_OFFER, hostA),
-            new ResourceRequest(threePortTask, bag(threePortTask), EMPTY)));
+            new ResourceRequest(threePortTask, bag(threePortTask), empty())));
   }
 
   @Test
@@ -214,6 +221,55 @@ public class SchedulingFilterImplTest extends EasyMockTest {
     assertNoVetoes(
         makeTask(),
         hostAttributes(HOST_A, MaintenanceMode.SCHEDULED, host(HOST_A), rack(RACK_A)));
+  }
+
+  @Test
+  public void testDrainingMesosMaintenance() {
+    // Start the test at minute 8
+    clock.advance(Amount.of(8L, Time.MINUTES));
+
+    // The agent will go down at minute 9
+    // this is less than the threshold of two minutes
+
+    Instant start = Instant.ofEpochMilli(Amount.of(9L, Time.MINUTES).as(Time.MILLISECONDS));
+
+    ITaskConfig task = makeTask();
+    UnusedResource unusedResource = new UnusedResource(
+        DEFAULT_OFFER,
+        hostAttributes(HOST_A),
+        Optional.of(start));
+    ResourceRequest request = new ResourceRequest(task, bag(task), empty());
+
+    control.replay();
+
+    assertEquals(
+        ImmutableSet.of(Veto.maintenance("draining")),
+        defaultFilter.filter(unusedResource, request));
+  }
+
+  @Test
+  public void testNotVetoingWithMesosMaintenace() {
+    // Start the test at minute 8
+    clock.advance(Amount.of(8L, Time.MINUTES));
+
+    // The agent will go down at minute 100
+    // this is greater than the threshold of two minutes
+
+    Instant start = Instant.ofEpochMilli(Amount.of(100L, Time.MINUTES).as(Time.MILLISECONDS));
+
+    ITaskConfig task = makeTask();
+    UnusedResource unusedResource = new UnusedResource(
+        DEFAULT_OFFER,
+        hostAttributes(HOST_A),
+        Optional.of(start));
+    ResourceRequest request = new ResourceRequest(task, bag(task), empty());
+
+    control.replay();
+
+    assertEquals(
+        ImmutableSet.of(),
+        defaultFilter.filter(unusedResource, request));
+
   }
 
   @Test
@@ -409,7 +465,7 @@ public class SchedulingFilterImplTest extends EasyMockTest {
         ImmutableSet.of(),
         defaultFilter.filter(
             new UnusedResource(DEFAULT_OFFER, hostA),
-            new ResourceRequest(task, bag(task), EMPTY)));
+            new ResourceRequest(task, bag(task), empty())));
 
     Constraint jvmNegated = jvmConstraint.deepCopy();
     jvmNegated.getConstraint().getValue().setNegated(true);
@@ -499,7 +555,7 @@ public class SchedulingFilterImplTest extends EasyMockTest {
 
     return checkConstraint(
         job,
-        EMPTY,
+        empty(),
         hostAttributes,
         constraintName,
         expected,
@@ -537,7 +593,7 @@ public class SchedulingFilterImplTest extends EasyMockTest {
   }
 
   private void assertNoVetoes(ITaskConfig task, IHostAttributes hostAttributes) {
-    assertVetoes(task, hostAttributes, EMPTY);
+    assertVetoes(task, hostAttributes, empty());
   }
 
   private void assertNoVetoes(
@@ -549,7 +605,7 @@ public class SchedulingFilterImplTest extends EasyMockTest {
   }
 
   private void assertVetoes(ITaskConfig task, IHostAttributes hostAttributes, Veto... vetoes) {
-    assertVetoes(task, hostAttributes, EMPTY, vetoes);
+    assertVetoes(task, hostAttributes, empty(), vetoes);
   }
 
   private void assertVetoes(
@@ -619,9 +675,6 @@ public class SchedulingFilterImplTest extends EasyMockTest {
   private ITaskConfig makeTask(IJobKey job, int cpus, long ramMb, long diskMb) {
     return ITaskConfig.build(new TaskConfig()
         .setJob(job.newBuilder())
-        .setNumCpus(cpus)
-        .setRamMb(ramMb)
-        .setDiskMb(diskMb)
         .setResources(ImmutableSet.of(numCpus(cpus), ramMb(ramMb), diskMb(diskMb)))
         .setExecutorConfig(new ExecutorConfig(apiConstants.AURORA_EXECUTOR_NAME, "config")));
   }

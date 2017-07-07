@@ -42,6 +42,8 @@ Required flags:
 	Endpoint specification for the ZooKeeper servers.
 
 Optional flags:
+-allow_container_volumes (default false)
+	Allow passing in volumes in the job. Enabling this could pose a privilege escalation threat.
 -allow_docker_parameters (default false)
 	Allow to pass docker container parameters in the job.
 -allow_gpu_resource (default false)
@@ -56,9 +58,11 @@ Optional flags:
 	The number of worker threads to process async task operations with.
 -backup_interval (default (1, hrs))
 	Minimum interval on which to write a storage backup.
--cron_scheduler_num_threads (default 100)
+-cron_scheduler_num_threads (default 10)
 	Number of threads to use for the cron scheduler thread pool.
--cron_start_initial_backoff (default (1, secs))
+-cron_scheduling_max_batch_size (default 10) [must be > 0]
+	The maximum number of triggered cron jobs that can be processed in a batch.
+-cron_start_initial_backoff (default (5, secs))
 	Initial backoff delay while waiting for a previous cron run to be killed.
 -cron_start_max_backoff (default (1, mins))
 	Max backoff delay while waiting for a previous cron run to be killed.
@@ -80,6 +84,8 @@ Optional flags:
 	Specifies the frequency at which snapshots of local storage are taken and written to the log.
 -enable_cors_for
 	List of domains for which CORS support should be enabled.
+-enable_db_metrics (default true)
+	Whether to use MyBatis interceptor to measure the timing of intercepted Statements.
 -enable_h2_console (default false)
 	Enable H2 DB management console.
 -enable_mesos_fetcher (default false)
@@ -100,8 +106,8 @@ Optional flags:
 	When 'framework_authentication_file' flag is set, the FrameworkInfo registered with the mesos master will also contain the principal. This is necessary if you intend to use mesos authorization via mesos ACLs. The default will change in a future release. Changing this value is backwards incompatible. For details, see MESOS-703.
 -framework_failover_timeout (default (21, days))
 	Time after which a framework is considered deleted.  SHOULD BE VERY HIGH.
--framework_name (default TwitterScheduler)
-	Name used to register the Aurora framework with Mesos. Changing this value can be backwards incompatible. For details, see MESOS-703.
+-framework_name (default Aurora)
+	Name used to register the Aurora framework with Mesos.
 -global_container_mounts (default [])
 	A comma separated list of mount points (in host:container form) to mount into all (non-mesos) containers.
 -history_max_per_job_threshold (default 100)
@@ -150,8 +156,12 @@ Optional flags:
 	Maximum delay between attempts to schedule a PENDING tasks.
 -max_status_update_batch_size (default 1000) [must be > 0]
 	The maximum number of status updates that can be processed in a batch.
+-max_task_event_batch_size (default 300) [must be > 0]
+	The maximum number of task state change events that can be processed in a batch.
 -max_tasks_per_job (default 4000) [must be > 0]
 	Maximum number of allowed tasks in a single job.
+-max_tasks_per_schedule_attempt (default 5) [must be > 0]
+	The maximum number of tasks to pick in a single scheduling attempt.
 -max_update_instance_failures (default 20000) [must be > 0]
 	Upper limit on the number of failures allowed during a job update. This helps cap potentially unbounded entries into storage.
 -min_offer_hold_time (default (5, mins))
@@ -180,6 +190,8 @@ Optional flags:
 	If true, Aurora populates DiscoveryInfo field of Mesos TaskInfo.
 -preemption_delay (default (3, mins))
 	Time interval after which a pending task becomes eligible to preempt other tasks
+-preemption_slot_finder_modules (default [class org.apache.aurora.scheduler.preemptor.PendingTaskProcessorModule, class org.apache.aurora.scheduler.preemptor.PreemptionVictimFilterModule])
+  Guice modules for replacing preemption logic.
 -preemption_slot_hold_time (default (5, mins))
 	Time to hold a preemption slot found before it is discarded.
 -preemption_slot_search_interval (default (1, mins))
@@ -200,9 +212,13 @@ Optional flags:
 	Difference between explicit and implicit reconciliation intervals intended to create a non-overlapping task reconciliation schedule.
 -require_docker_use_executor (default true)
 	If false, Docker tasks may run without an executor (EXPERIMENTAL)
+-scheduling_max_batch_size (default 3) [must be > 0]
+	The maximum number of scheduling attempts that can be processed in a batch.
+-serverset_endpoint_name (default http)
+	Name of the scheduler endpoint published in ZooKeeper.
 -shiro_ini_path
 	Path to shiro.ini for authentication and authorization configuration.
--shiro_realm_modules (default [org.apache.aurora.scheduler.app.MoreModules$1@158a8276])
+-shiro_realm_modules (default [class org.apache.aurora.scheduler.http.api.security.IniShiroRealmModule])
 	Guice modules for configuring Shiro Realms.
 -sla_non_prod_metrics (default [])
 	Metric categories collected for non production tasks.
@@ -214,10 +230,14 @@ Optional flags:
 	Log all queries that take at least this long to execute.
 -slow_query_log_threshold (default (25, ms))
 	Log all queries that take at least this long to execute.
+-snapshot_hydrate_stores (default [locks, hosts, quota, job_updates])
+	Which H2-backed stores to fully hydrate on the Snapshot.
 -stat_retention_period (default (1, hrs))
 	Time for a stat to be retained in memory before expiring.
 -stat_sampling_interval (default (1, secs))
 	Statistic value sampling interval.
+-task_assigner_modules (default [class org.apache.aurora.scheduler.state.FirstFitTaskAssignerModule])
+  Guice modules for replacing task assignment logic.
 -thermos_executor_cpu (default 0.25)
 	The number of CPU cores to allocate for each instance of the executor.
 -thermos_executor_flags
@@ -228,6 +248,8 @@ Optional flags:
 	A comma separated list of additional resources to copy into the sandbox.Note: if thermos_executor_path is not the thermos_executor.pex file itself, this must include it.
 -thermos_home_in_sandbox (default false)
 	If true, changes HOME to the sandbox before running the executor. This primarily has the effect of causing the executor and runner to extract themselves into the sandbox.
+-thrift_method_interceptor_modules (default [])
+	Additional Guice modules for intercepting Thrift method calls.
 -transient_task_state_timeout (default (5, mins))
 	The amount of time after which to treat a task stuck in a transient state as LOST.
 -use_beta_db_task_store (default false)

@@ -47,10 +47,12 @@ from gen.apache.aurora.api.ttypes import (
     LimitConstraint,
     MesosContainer,
     Metadata,
+    Mode,
     Resource,
     TaskConfig,
     TaskConstraint,
-    ValueConstraint
+    ValueConstraint,
+    Volume
 )
 
 __all__ = (
@@ -163,9 +165,26 @@ def create_container_config(container):
          else unwrapped)))
 
   if isinstance(unwrapped, Mesos):
-    return Container(MesosContainer(image_to_thrift(unwrapped.image())), None)
+    image = image_to_thrift(unwrapped.image())
+    volumes = volumes_to_thrift(unwrapped.volumes())
+
+    return Container(MesosContainer(image, volumes), None)
 
   raise InvalidConfig('If a container is specified it must set one type.')
+
+
+def volumes_to_thrift(volumes):
+  thrift_volumes = []
+  for v in volumes:
+    mode = parse_enum(Mode, v.mode())
+    thrift_volumes.append(
+      Volume(
+          containerPath=fully_interpolated(v.container_path()),
+          hostPath=fully_interpolated(v.host_path()),
+          mode=mode
+      )
+    )
+  return thrift_volumes
 
 
 def image_to_thrift(image):
@@ -222,7 +241,7 @@ MESOS_INSTANCE_REF = Ref.from_address('mesos.instance')
 MESOS_HOSTNAME_REF = Ref.from_address('mesos.hostname')
 THERMOS_PORT_SCOPE_REF = Ref.from_address('thermos.ports')
 THERMOS_TASK_ID_REF = Ref.from_address('thermos.task_id')
-METADATA_LABEL_PREFIX = "org.apache.aurora.metadata."
+
 
 def convert(job, metadata=frozenset(), ports=frozenset()):
   """Convert a Pystachio MesosJob to an Aurora Thrift JobConfiguration."""
@@ -250,8 +269,7 @@ def convert(job, metadata=frozenset(), ports=frozenset()):
   task.tier = not_empty_or(job.tier(), None)
 
   # Add metadata to a task, to display in the scheduler UI.
-  task.metadata = frozenset(Metadata(key=METADATA_LABEL_PREFIX+str(key),
-                                     value=str(value)) for key, value in metadata)
+  task.metadata = frozenset(Metadata(key=str(key), value=str(value)) for key, value in metadata)
 
   # task components
   if not task_raw.has_resources():
@@ -263,24 +281,23 @@ def convert(job, metadata=frozenset(), ports=frozenset()):
       fully_interpolated(task_raw.resources().ram()),
       fully_interpolated(task_raw.resources().disk())))
 
-  task.numCpus = fully_interpolated(task_raw.resources().cpu())
-  task.ramMb = fully_interpolated(task_raw.resources().ram()) / MB
-  task.diskMb = fully_interpolated(task_raw.resources().disk()) / MB
-  if task.numCpus <= 0 or task.ramMb <= 0 or task.diskMb <= 0:
+  numCpus = fully_interpolated(task_raw.resources().cpu())
+  ramMb = fully_interpolated(task_raw.resources().ram()) / MB
+  diskMb = fully_interpolated(task_raw.resources().disk()) / MB
+  if numCpus <= 0 or ramMb <= 0 or diskMb <= 0:
     raise InvalidConfig('Task has invalid resources.  cpu/ramMb/diskMb must all be positive: '
-        'cpu:%r ramMb:%r diskMb:%r' % (task.numCpus, task.ramMb, task.diskMb))
+        'cpu:%r ramMb:%r diskMb:%r' % (numCpus, ramMb, diskMb))
   numGpus = fully_interpolated(task_raw.resources().gpu())
 
   task.resources = frozenset(
-      [Resource(numCpus=task.numCpus),
-       Resource(ramMb=task.ramMb),
-       Resource(diskMb=task.diskMb)]
+      [Resource(numCpus=numCpus),
+       Resource(ramMb=ramMb),
+       Resource(diskMb=diskMb)]
       + [Resource(namedPort=p) for p in ports]
-      + [Resource(numGpus=numGpus)] if numGpus else [])
+      + ([Resource(numGpus=numGpus)] if numGpus else []))
 
   task.job = key
   task.owner = owner
-  task.requestedPorts = ports
   task.taskLinks = {}  # See AURORA-739
   task.constraints = constraints_to_thrift(not_empty_or(job.constraints(), {}))
   task.container = create_container_config(job.container())

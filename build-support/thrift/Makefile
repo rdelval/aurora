@@ -35,7 +35,6 @@ THRIFT_CONFIGURE_FLAGS = \
   --without-php \
   --without-php_extension \
   --without-pic \
-  --without-python \
   --without-qt4 \
   --without-ruby \
   --without-tests
@@ -56,7 +55,8 @@ $(THRIFT):
 	patch -p1 < thrift.patch && \
 	patch -p1 < ../AURORA-1727.compiler.cpp.Makefile.in.patch && \
 	patch -p1 < ../AURORA-1727.compiler.cpp.src.generate.t_java_generator.cc.patch && \
-	./configure $(THRIFT_CONFIGURE_FLAGS) && \
+	patch -p1 < ../AURORA-1727.lib.py.setup.py.patch && \
+	PYTHON=$$(which python2.7) ./configure $(THRIFT_CONFIGURE_FLAGS) && \
 	make -j4
 
 clean:

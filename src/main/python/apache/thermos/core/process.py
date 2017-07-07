@@ -25,7 +25,6 @@ import grp
 import os
 import pwd
 import select
-import shlex
 import signal
 import subprocess
 import sys
@@ -39,7 +38,7 @@ from twitter.common.lang import Interface
 from twitter.common.quantity import Amount, Data, Time
 from twitter.common.recordio import ThriftRecordReader, ThriftRecordWriter
 
-from apache.thermos.common.process_util import wrap_with_mesos_containerizer
+from apache.thermos.common.process_util import setup_child_subreaping, wrap_with_mesos_containerizer
 
 from gen.apache.aurora.api.constants import TASK_FILESYSTEM_MOUNT_POINT
 from gen.apache.thermos.ttypes import ProcessState, ProcessStatus, RunnerCkpt
@@ -151,8 +150,9 @@ class ProcessBase(object):
       if self._rotate_log_backups <= 0:
         raise ValueError('Log backups cannot be less than one.')
 
-  def _log(self, msg):
-    log.debug('[process:%5s=%s]: %s' % (self._pid, self.name(), msg))
+  def _log(self, msg, exc_info=None):
+    log.debug('[process:%5s=%s]: %s' % (self._pid, self.name(), msg),
+            exc_info=exc_info)
 
   def _getpwuid(self):
     """Returns a tuple of the user (i.e. --user) and current user."""
@@ -312,6 +312,9 @@ class RealPlatform(Platform):
     self._fork = fork
 
   def fork(self):
+    # Before we fork, ensure we become the parent of any processes that escape
+    # the cordinator.
+    setup_child_subreaping()
     pid = self._fork()
     if pid == 0:
       self._sanitize()
@@ -387,9 +390,8 @@ class Process(ProcessBase):
     # If mesos-containerizer is not set, we only need to wrap the cmdline in a bash invocation.
     if self._mesos_containerizer_path is None:
       return ['/bin/bash', '-c', cmdline]
-
-    return shlex.split(
-        wrap_with_mesos_containerizer(cmdline, self._user, cwd, self._mesos_containerizer_path))
+    else:
+      return wrap_with_mesos_containerizer(cmdline, self._user, cwd, self._mesos_containerizer_path)
 
   def execute(self):
     """Perform final initialization and launch target process commandline in a subprocess."""

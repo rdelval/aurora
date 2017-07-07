@@ -38,7 +38,7 @@ import org.apache.aurora.scheduler.BatchWorker.NoResult;
 import org.apache.aurora.scheduler.base.JobKeys;
 import org.apache.aurora.scheduler.base.Query;
 import org.apache.aurora.scheduler.base.Tasks;
-import org.apache.aurora.scheduler.configuration.ConfigurationManager;
+import org.apache.aurora.scheduler.configuration.SanitizedConfiguration;
 import org.apache.aurora.scheduler.cron.CronException;
 import org.apache.aurora.scheduler.cron.SanitizedCronJob;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
@@ -89,7 +89,6 @@ class AuroraCronJob implements Job, EventSubscriber {
   @VisibleForTesting
   static final Optional<String> KILL_AUDIT_MESSAGE = Optional.of("Killed by cronScheduler");
 
-  private final ConfigurationManager configurationManager;
   private final StateManager stateManager;
   private final BackoffHelper delayedStartBackoff;
   private final BatchWorker<NoResult> batchWorker;
@@ -121,12 +120,10 @@ class AuroraCronJob implements Job, EventSubscriber {
 
   @Inject
   AuroraCronJob(
-      ConfigurationManager configurationManager,
       Config config,
       StateManager stateManager,
       CronBatchWorker batchWorker) {
 
-    this.configurationManager = requireNonNull(configurationManager);
     this.stateManager = requireNonNull(stateManager);
     this.batchWorker = requireNonNull(batchWorker);
     this.delayedStartBackoff = requireNonNull(config.getDelayedStartBackoff());
@@ -154,9 +151,9 @@ class AuroraCronJob implements Job, EventSubscriber {
       if (killFollowups.contains(key)) {
         context.getJobDetail().getJobDataMap().remove(path);
         killFollowups.remove(key);
-        LOG.info("Resetting job context for cron " + path);
+        LOG.info("Resetting job context for cron {}", path);
       } else {
-        LOG.info("Ignoring trigger as another concurrent run is active for cron " + path);
+        LOG.info("Ignoring trigger as another concurrent run is active for cron {}", path);
         return;
       }
     }
@@ -171,9 +168,9 @@ class AuroraCronJob implements Job, EventSubscriber {
 
       SanitizedCronJob cronJob;
       try {
-        cronJob = SanitizedCronJob.fromUnsanitized(configurationManager, config.get());
-      } catch (ConfigurationManager.TaskDescriptionException | CronException e) {
-        LOG.warn("Invalid cron job for {} in storage - failed to parse with {}", key, e);
+        cronJob = SanitizedCronJob.from(new SanitizedConfiguration(config.get()));
+      } catch (CronException e) {
+        LOG.warn("Invalid cron job for {} in storage - failed to parse", key, e);
         CRON_JOB_PARSE_FAILURES.incrementAndGet();
         return BatchWorker.NO_RESULT;
       }

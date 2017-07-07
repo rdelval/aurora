@@ -230,23 +230,20 @@ class InspectCommand(Verb):
     return "inspect"
 
   def get_options(self):
-    return [BIND_OPTION, JSON_READ_OPTION,
+    return [BIND_OPTION, JSON_READ_OPTION, JSON_WRITE_OPTION,
         CommandOption("--raw", dest="raw", default=False, action="store_true",
             help="Show the raw configuration."),
         JOBSPEC_ARGUMENT, CONFIG_ARGUMENT]
 
-  def execute(self, context):
-    config = context.get_job_config(context.options.jobspec, context.options.config_file)
-    if context.options.raw:
-      context.print_out(str(config.job()))
-      return EXIT_OK
-
+  def _render_config_pretty(self, config, context):
+    """Render the config description in human-friendly format"""
     job = config.raw()
     job_thrift = config.job()
     context.print_out("Job level information")
     context.print_out("name:       '%s'" % job.name(), indent=2)
     context.print_out("role:       '%s'" % job.role(), indent=2)
-    context.print_out("contact:    '%s'" % job.contact(), indent=2)
+    if job.has_contact():
+      context.print_out("contact:    '%s'" % job.contact(), indent=2)
     context.print_out("cluster:    '%s'" % job.cluster(), indent=2)
     context.print_out("instances:  '%s'" % job.instances(), indent=2)
     if job.has_cron_schedule():
@@ -287,6 +284,18 @@ class InspectCommand(Verb):
       context.print_out("")
     return EXIT_OK
 
+  def execute(self, context):
+    config = context.get_job_config(context.options.jobspec, context.options.config_file)
+    if context.options.raw:
+      context.print_out(str(config.job()))
+      return EXIT_OK
+
+    if context.options.write_json:
+      context.print_out(config.raw().json_dumps())
+      return EXIT_OK
+    else:
+      return self._render_config_pretty(config, context)
+
 
 class AbstractKillCommand(Verb):
   def get_options(self):
@@ -296,7 +305,9 @@ class AbstractKillCommand(Verb):
         CONFIG_OPTION,
         BATCH_OPTION,
         MAX_TOTAL_FAILURES_OPTION,
-        NO_BATCHING_OPTION]
+        NO_BATCHING_OPTION,
+        CommandOption('--message', '-m', type=str, default=None,
+                      help='Message to include with the kill state transition')]
 
   def wait_kill_tasks(self, context, scheduler, job_key, instances=None):
     monitor = JobMonitor(scheduler, job_key)
@@ -322,7 +333,7 @@ class AbstractKillCommand(Verb):
       batch = []
       for i in range(min(context.options.batch_size, len(instances_to_kill))):
         batch.append(instances_to_kill.pop())
-      resp = api.kill_job(job, batch, config=config)
+      resp = api.kill_job(job, batch, config=config, message=context.options.message)
       # Short circuit max errors in this case as it's most likely a fatal repeatable error.
       context.log_response_and_raise(
         resp,
@@ -403,7 +414,7 @@ class KillCommand(AbstractKillCommand):
     api = context.get_api(job.cluster)
     config = context.get_job_config_optional(job, context.options.config)
     if context.options.no_batching:
-      resp = api.kill_job(job, instances_arg, config=config)
+      resp = api.kill_job(job, instances_arg, config=config, message=context.options.message)
       context.log_response_and_raise(resp)
       wait_result = self.wait_kill_tasks(context, api.scheduler_proxy, job, instances_arg)
       if wait_result is not EXIT_OK:
@@ -433,7 +444,7 @@ class KillAllJobCommand(AbstractKillCommand):
     api = context.get_api(job.cluster)
     config = context.get_job_config_optional(job, context.options.config)
     if context.options.no_batching:
-      resp = api.kill_job(job, None, config=config)
+      resp = api.kill_job(job, None, config=config, message=context.options.message)
       context.log_response_and_raise(resp)
       wait_result = self.wait_kill_tasks(context, api.scheduler_proxy, job)
       if wait_result is not EXIT_OK:

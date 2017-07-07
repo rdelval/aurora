@@ -39,7 +39,6 @@ class AuroraExecutor(ExecutorBase, Observable):
   PERSISTENCE_WAIT = Amount(5, Time.SECONDS)
   SANDBOX_INITIALIZATION_TIMEOUT = Amount(10, Time.MINUTES)
   START_TIMEOUT = Amount(2, Time.MINUTES)
-  STOP_TIMEOUT = Amount(2, Time.MINUTES)
   STOP_WAIT = Amount(5, Time.SECONDS)
 
   def __init__(
@@ -50,7 +49,8 @@ class AuroraExecutor(ExecutorBase, Observable):
       status_providers=(),
       clock=time,
       no_sandbox_create_user=False,
-      sandbox_mount_point=None):
+      sandbox_mount_point=None,
+      stop_timeout_in_secs=120):
 
     ExecutorBase.__init__(self)
     if not isinstance(runner_provider, TaskRunnerProvider):
@@ -67,6 +67,7 @@ class AuroraExecutor(ExecutorBase, Observable):
     self._sandbox_provider = sandbox_provider
     self._no_sandbox_create_user = no_sandbox_create_user
     self._sandbox_mount_point = sandbox_mount_point
+    self._stop_timeout = Amount(stop_timeout_in_secs, Time.SECONDS)
     self._kill_manager = KillManager()
     # Events that are exposed for interested entities
     self.runner_aborted = threading.Event()
@@ -114,8 +115,6 @@ class AuroraExecutor(ExecutorBase, Observable):
 
     if not self._start_runner(driver, assigned_task):
       return
-
-    self.send_update(driver, self._task_id, mesos_pb2.TASK_RUNNING)
 
     try:
       self._start_status_manager(driver, assigned_task)
@@ -179,9 +178,16 @@ class AuroraExecutor(ExecutorBase, Observable):
     # chain the runner to the other checkers, but do not chain .start()/.stop()
     complete_checker = ChainedStatusChecker([self._runner, self._chained_checker])
     self._status_manager = self._status_manager_class(
-        complete_checker, self._shutdown, clock=self._clock)
+        complete_checker,
+        self._signal_running,
+        self._shutdown,
+        clock=self._clock)
     self._status_manager.start()
     self.status_manager_started.set()
+
+  def _signal_running(self, status_result):
+    log.info('Send TASK_RUNNING status update. status: %s' % status_result)
+    self.send_update(self._driver, self._task_id, mesos_pb2.TASK_RUNNING, status_result.reason)
 
   def _signal_kill_manager(self, driver, task_id, reason):
     if self._task_id is None:
@@ -201,7 +207,7 @@ class AuroraExecutor(ExecutorBase, Observable):
     runner_status = self._runner.status
 
     try:
-      propagate_deadline(self._chained_checker.stop, timeout=self.STOP_TIMEOUT)
+      propagate_deadline(self._chained_checker.stop, timeout=self._stop_timeout)
     except Timeout:
       log.error('Failed to stop all checkers within deadline.')
     except Exception:
@@ -209,7 +215,7 @@ class AuroraExecutor(ExecutorBase, Observable):
       log.error(traceback.format_exc())
 
     try:
-      propagate_deadline(self._runner.stop, timeout=self.STOP_TIMEOUT)
+      propagate_deadline(self._runner.stop, timeout=self._stop_timeout)
     except Timeout:
       log.error('Failed to stop runner within deadline.')
     except Exception:
@@ -255,6 +261,7 @@ class AuroraExecutor(ExecutorBase, Observable):
       however, no other callbacks will be invoked on this executor until this callback has returned.
     """
     self.launched.set()
+    self.log('TaskInfo: %s' % task)
     self.log('launchTask got task: %s:%s' % (task.name, task.task_id.value))
 
     # TODO(wickman)  Update the tests to call registered(), then remove this line and issue
@@ -271,6 +278,7 @@ class AuroraExecutor(ExecutorBase, Observable):
     self._task_id = task.task_id.value
 
     assigned_task = self.validate_task(task)
+    self.log("Assigned task: %s" % assigned_task)
     if not assigned_task:
       self.send_update(driver, self._task_id, mesos_pb2.TASK_FAILED,
           'Could not deserialize task.')

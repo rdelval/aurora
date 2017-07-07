@@ -53,6 +53,8 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.shiro.authc.credential.CredentialsMatcher;
+import org.apache.shiro.authc.credential.SimpleCredentialsMatcher;
 import org.apache.shiro.config.Ini;
 import org.apache.shiro.realm.text.IniRealm;
 import org.apache.thrift.TException;
@@ -112,12 +114,14 @@ public class HttpSecurityIT extends AbstractJettyTest {
   private static final Named SHIRO_AFTER_AUTH_FILTER_ANNOTATION = Names.named("shiro_post_filter");
 
   private Ini ini;
+  private Class<? extends CredentialsMatcher> credentialsMatcher;
   private AnnotatedAuroraAdmin auroraAdmin;
   private Filter shiroAfterAuthFilter;
 
   @Before
   public void setUp() {
     ini = new Ini();
+    credentialsMatcher = SimpleCredentialsMatcher.class;
 
     Ini.Section users = ini.addSection(IniRealm.USERS_SECTION_NAME);
     users.put(ROOT.getUserName(), COMMA_JOINER.join(ROOT.getPassword(), ADMIN_ROLE));
@@ -155,7 +159,7 @@ public class HttpSecurityIT extends AbstractJettyTest {
         new ApiModule(),
         new H2ConsoleModule(true),
         new HttpSecurityModule(
-            new IniShiroRealmModule(ini),
+            new IniShiroRealmModule(ini, credentialsMatcher),
             Key.get(Filter.class, SHIRO_AFTER_AUTH_FILTER_ANNOTATION)),
         new AbstractModule() {
           @Override
@@ -225,7 +229,7 @@ public class HttpSecurityIT extends AbstractJettyTest {
 
   private void assertKillTasksFails(AuroraAdmin.Client client) throws TException {
     try {
-      client.killTasks(null, null);
+      client.killTasks(null, null, null);
       fail("killTasks should fail.");
     } catch (TTransportException e) {
       // Expected.
@@ -236,44 +240,45 @@ public class HttpSecurityIT extends AbstractJettyTest {
   public void testAuroraSchedulerManager() throws TException, ServletException, IOException {
     JobKey job = JobKeys.from("role", "env", "name").newBuilder();
 
-    expect(auroraAdmin.killTasks(job, null)).andReturn(OK).times(2);
-    expect(auroraAdmin.killTasks(ADS_STAGING_JOB.newBuilder(), null)).andReturn(OK);
+    expect(auroraAdmin.killTasks(job, null, null)).andReturn(OK).times(2);
+    expect(auroraAdmin.killTasks(ADS_STAGING_JOB.newBuilder(), null, null)).andReturn(OK);
     expectShiroAfterAuthFilter().atLeastOnce();
 
     replayAndStart();
 
     assertEquals(
         OK,
-        getAuthenticatedClient(WFARNER).killTasks(job, null));
+        getAuthenticatedClient(WFARNER).killTasks(job, null, null));
     assertEquals(
         OK,
-        getAuthenticatedClient(ROOT).killTasks(job, null));
+        getAuthenticatedClient(ROOT).killTasks(job, null, null));
 
     assertEquals(
         ResponseCode.INVALID_REQUEST,
-        getAuthenticatedClient(UNPRIVILEGED).killTasks(null, null).getResponseCode());
+        getAuthenticatedClient(UNPRIVILEGED).killTasks(null, null, null).getResponseCode());
     assertEquals(
         ResponseCode.AUTH_FAILED,
         getAuthenticatedClient(UNPRIVILEGED)
-            .killTasks(job, null)
+            .killTasks(job, null, null)
             .getResponseCode());
     assertEquals(
         ResponseCode.INVALID_REQUEST,
-        getAuthenticatedClient(BACKUP_SERVICE).killTasks(null, null).getResponseCode());
+        getAuthenticatedClient(BACKUP_SERVICE).killTasks(null, null, null).getResponseCode());
     assertEquals(
         ResponseCode.AUTH_FAILED,
         getAuthenticatedClient(BACKUP_SERVICE)
-            .killTasks(job, null)
+            .killTasks(job, null, null)
             .getResponseCode());
     assertEquals(
         ResponseCode.AUTH_FAILED,
         getAuthenticatedClient(DEPLOY_SERVICE)
-            .killTasks(job, null)
+            .killTasks(job, null, null)
             .getResponseCode());
     assertEquals(
         OK,
         getAuthenticatedClient(DEPLOY_SERVICE).killTasks(
             ADS_STAGING_JOB.newBuilder(),
+            null,
             null));
 
     assertKillTasksFails(getUnauthenticatedClient());

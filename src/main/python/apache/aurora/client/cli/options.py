@@ -167,6 +167,18 @@ def parse_options(options):
   return options.split() if options is not None else []
 
 
+def create_instance_argument(help_text):
+  '''Create a CommandOption instance whose type is instance_specifier based on help text
+
+  :param help_text: help message for a CommandOption instance
+  :type help_textL string
+  :rtype: CommandOption
+  '''
+  return CommandOption('instance_spec', type=instance_specifier,
+      default=None, metavar="CLUSTER/ROLE/ENV/NAME[/INSTANCES]",
+      help=help_text)
+
+
 BATCH_OPTION = CommandOption('--batch-size', type=int, default=1,
         help='Number of instances to be operate on in one iteration')
 
@@ -212,9 +224,8 @@ INSTANCES_OPTION = CommandOption('--instances', type=parse_instances, dest='inst
          'or a range (e.g. 0-2) or any combination of the two (e.g. 0-2,5,7-9). If not set, '
          'all instances will be acted on.')
 
-INSTANCES_SPEC_ARGUMENT = CommandOption('instance_spec', type=instance_specifier,
-    default=None, metavar="CLUSTER/ROLE/ENV/NAME[/INSTANCES]",
-    help=('Fully specified job instance key, in CLUSTER/ROLE/ENV/NAME[/INSTANCES] format. '
+INSTANCES_SPEC_ARGUMENT = create_instance_argument(
+    help_text=('Fully specified job instance key, in CLUSTER/ROLE/ENV/NAME[/INSTANCES] format. '
         'If INSTANCES is omitted, then all instances will be operated on.'))
 
 
@@ -249,7 +260,7 @@ MAX_TOTAL_FAILURES_OPTION = CommandOption('--max-total-failures', type=int, defa
 
 
 NO_BATCHING_OPTION = CommandOption('--no-batching', default=False, action='store_true',
-  help='Run the command on all instances at once, instead of running in batches')
+    help='Run the command on all instances at once, instead of running in batches')
 
 
 ROLE_ARGUMENT = CommandOption('role', type=parse_qualified_role, metavar='CLUSTER/NAME',
@@ -257,6 +268,19 @@ ROLE_ARGUMENT = CommandOption('role', type=parse_qualified_role, metavar='CLUSTE
 
 ROLE_OPTION = CommandOption('--role', metavar='ROLENAME', default=None,
     help='Name of the user/role')
+
+SCP_OPTIONS = CommandOption('--scp-options', type=parse_options, dest='scp_options',
+    default=None, metavar='scp_options', help='A string of space separated system scp options.')
+
+SCP_SOURCE_ARGUMENT = CommandOption('source', nargs='+', metavar='source',
+    help='Source file(s)/folder(s) to copy, in `[CLUSTER/ROLE/ENV/NAME/INSTANCE:]source` format.')
+
+SCP_DEST_ARGUMENT = CommandOption('dest', metavar='dest',
+    help='Destination path to copy into, in `[CLUSTER/ROLE/ENV/NAME/INSTANCE:]dest` format.')
+
+SSH_INSTANCE_ARGUMENT = create_instance_argument(
+    help_text=('Fully specified job instance key, in CLUSTER/ROLE/ENV/NAME[/INSTANCES] format. '
+        'If INSTANCES is omitted, a random instance will picked up for the SSH session'))
 
 SSH_USER_OPTION = CommandOption('--ssh-user', '-l', default=None, metavar="ssh_username",
     help='ssh as this username instead of the job\'s role')
@@ -267,7 +291,6 @@ SSH_OPTIONS = CommandOption('--ssh-options', type=parse_options, dest='ssh_optio
 STRICT_OPTION = CommandOption('--strict', default=False, action='store_true',
     help=("Check instances and generate an error for instance ranges in parameters "
     "that are larger than the actual set of instances in the job"))
-
 
 TASK_INSTANCE_ARGUMENT = CommandOption('task_instance', type=parse_task_instance_key,
     help='A task instance specifier, in the form CLUSTER/ROLE/ENV/NAME/INSTANCE')

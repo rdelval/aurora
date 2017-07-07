@@ -16,6 +16,7 @@ package org.apache.aurora.scheduler.base;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
@@ -50,9 +51,9 @@ import org.apache.aurora.scheduler.storage.entities.IJobKey;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
 import org.apache.aurora.scheduler.storage.log.ThriftBackfill;
-import org.apache.mesos.Protos;
-import org.apache.mesos.Protos.ExecutorID;
-import org.apache.mesos.Protos.ExecutorInfo;
+import org.apache.mesos.v1.Protos;
+import org.apache.mesos.v1.Protos.ExecutorID;
+import org.apache.mesos.v1.Protos.ExecutorInfo;
 
 /**
  * Convenience methods for working with tasks.
@@ -83,6 +84,7 @@ public final class TaskTestUtil {
           ImmutableSet.of(_Fields.MESOS),
           false,
           ImmutableMultimap.of(),
+          true,
           true,
           true,
           true);
@@ -154,7 +156,37 @@ public final class TaskTestUtil {
     return makeTask(id, makeConfig(job));
   }
 
+  public static IScheduledTask makeTask(String id, IJobKey job, int instanceId) {
+    return makeTask(id, makeConfig(job), instanceId, Optional.absent());
+  }
+
+  public static IScheduledTask makeTask(String id, IJobKey job, int instanceId, String agentId) {
+    return makeTask(id, makeConfig(job), instanceId, Optional.of(agentId));
+  }
+
   public static IScheduledTask makeTask(String id, ITaskConfig config) {
+    return makeTask(id, config, 2);
+  }
+
+  public static IScheduledTask makeTask(String id, ITaskConfig config, int instanceId) {
+    return makeTask(id, config, instanceId, Optional.absent());
+  }
+
+  public static IScheduledTask makeTask(
+      String id,
+      ITaskConfig config,
+      int instanceId,
+      Optional<String> agentId) {
+
+    AssignedTask assignedTask = new AssignedTask()
+        .setInstanceId(instanceId)
+        .setTaskId(id)
+        .setAssignedPorts(ImmutableMap.of("http", 1000))
+        .setTask(config.newBuilder());
+    if (agentId.isPresent()) {
+      assignedTask.setSlaveId(agentId.get());
+    }
+
     return IScheduledTask.build(new ScheduledTask()
         .setStatus(ScheduleStatus.ASSIGNED)
         .setTaskEvents(ImmutableList.of(
@@ -166,11 +198,7 @@ public final class TaskTestUtil {
                 .setScheduler("scheduler2")))
         .setAncestorId("ancestor")
         .setFailureCount(3)
-        .setAssignedTask(new AssignedTask()
-            .setInstanceId(2)
-            .setTaskId(id)
-            .setAssignedPorts(ImmutableMap.of("http", 1000))
-            .setTask(config.newBuilder())));
+        .setAssignedTask(assignedTask));
   }
 
   public static IScheduledTask addStateTransition(

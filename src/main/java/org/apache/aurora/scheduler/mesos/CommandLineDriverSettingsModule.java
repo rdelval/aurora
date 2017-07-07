@@ -19,11 +19,11 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
+import javax.inject.Singleton;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import com.google.inject.AbstractModule;
 
 import org.apache.aurora.common.args.Arg;
@@ -31,14 +31,14 @@ import org.apache.aurora.common.args.CmdLine;
 import org.apache.aurora.common.args.constraints.NotNull;
 import org.apache.aurora.common.quantity.Amount;
 import org.apache.aurora.common.quantity.Time;
-import org.apache.mesos.Protos;
+import org.apache.mesos.v1.Protos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.mesos.Protos.FrameworkInfo;
-import static org.apache.mesos.Protos.FrameworkInfo.Capability;
-import static org.apache.mesos.Protos.FrameworkInfo.Capability.Type.GPU_RESOURCES;
-import static org.apache.mesos.Protos.FrameworkInfo.Capability.Type.REVOCABLE_RESOURCES;
+import static org.apache.mesos.v1.Protos.FrameworkInfo;
+import static org.apache.mesos.v1.Protos.FrameworkInfo.Capability;
+import static org.apache.mesos.v1.Protos.FrameworkInfo.Capability.Type.GPU_RESOURCES;
+import static org.apache.mesos.v1.Protos.FrameworkInfo.Capability.Type.REVOCABLE_RESOURCES;
 
 /**
  * Creates and binds {@link DriverSettings} based on values found on the command line.
@@ -117,7 +117,10 @@ public class CommandLineDriverSettingsModule extends AbstractModule {
         MESOS_ROLE.hasAppliedValue() ? Optional.of(MESOS_ROLE.get()) : Optional.absent();
     DriverSettings settings = new DriverSettings(
         MESOS_MASTER_ADDRESS.get(),
-        credentials,
+        credentials);
+    bind(DriverSettings.class).toInstance(settings);
+
+    FrameworkInfo base =
         buildFrameworkInfo(
             FRAMEWORK_NAME.get(),
             EXECUTOR_USER.get(),
@@ -125,8 +128,13 @@ public class CommandLineDriverSettingsModule extends AbstractModule {
             FRAMEWORK_FAILOVER_TIMEOUT.get(),
             RECEIVE_REVOCABLE_RESOURCES.get(),
             allowGpuResource,
-            role));
-    bind(DriverSettings.class).toInstance(settings);
+            role);
+    bind(FrameworkInfo.class)
+        .annotatedWith(FrameworkInfoFactory.FrameworkInfoFactoryImpl.BaseFrameworkInfo.class)
+        .toInstance(base);
+    bind(FrameworkInfoFactory.class).to(FrameworkInfoFactory.FrameworkInfoFactoryImpl.class);
+    bind(FrameworkInfoFactory.FrameworkInfoFactoryImpl.class).in(Singleton.class);
+
   }
 
   private static Optional<Protos.Credential> getCredentials() {
@@ -136,7 +144,7 @@ public class CommandLineDriverSettingsModule extends AbstractModule {
         properties = parseCredentials(new FileInputStream(FRAMEWORK_AUTHENTICATION_FILE.get()));
       } catch (FileNotFoundException e) {
         LOG.error("Authentication File not Found");
-        throw Throwables.propagate(e);
+        throw new RuntimeException(e);
       }
 
       LOG.info(
@@ -153,6 +161,10 @@ public class CommandLineDriverSettingsModule extends AbstractModule {
   }
 
   @VisibleForTesting
+  // See: https://github.com/apache/mesos/commit/d06d05c76eca13745ca73039b93ad684b9d07196
+  // The role field has been deprecated but the replacement is not ready. We'll also have to
+  // turn on MULTI_ROLES capability before we can use the roles field.
+  @SuppressWarnings("deprecation")
   static FrameworkInfo buildFrameworkInfo(
       String frameworkName,
       String executorUser,
@@ -194,7 +206,7 @@ public class CommandLineDriverSettingsModule extends AbstractModule {
       properties.load(credentialsStream);
     } catch (IOException e) {
       LOG.error("Unable to load authentication file");
-      throw Throwables.propagate(e);
+      throw new RuntimeException(e);
     }
     Preconditions.checkState(properties.containsKey(PRINCIPAL_KEY),
         "The framework authentication file is missing the key: %s", PRINCIPAL_KEY);

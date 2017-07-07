@@ -56,11 +56,12 @@ DefaultHealthChecker      = HealthCheckerConfig(http=HttpHealthChecker())
 
 
 class HealthCheckConfig(Struct):
-  health_checker           = Default(HealthCheckerConfig, DefaultHealthChecker)
-  initial_interval_secs    = Default(Float, 15.0)
-  interval_secs            = Default(Float, 10.0)
-  max_consecutive_failures = Default(Integer, 0)
-  timeout_secs             = Default(Float, 1.0)
+  health_checker            = Default(HealthCheckerConfig, DefaultHealthChecker)
+  initial_interval_secs     = Default(Float, 15.0)
+  interval_secs             = Default(Float, 10.0)
+  max_consecutive_failures  = Default(Integer, 0)
+  min_consecutive_successes = Default(Integer, 1)
+  timeout_secs              = Default(Float, 1.0)
 
 
 class HttpLifecycleConfig(Struct):
@@ -72,6 +73,12 @@ class HttpLifecycleConfig(Struct):
 
   # Endpoint to hit to give a task it's final warning before being killed.
   shutdown_endpoint = Default(String, '/abortabortabort')
+
+  # How much time to wait in seconds after calling the graceful shutdown endpoint
+  graceful_shutdown_wait_secs = Default(Integer, 5)
+
+  # How much time to wait in seconds after calling the shutdown endpoint
+  shutdown_wait_secs = Default(Integer, 5)
 
 
 class LifecycleConfig(Struct):
@@ -131,9 +138,16 @@ class DockerImage(Struct):
   name = Required(String)
   tag = Required(String)
 
+Mode = Enum('RO', 'RW')
+
+class Volume(Struct):
+  container_path = Required(String)
+  host_path = Required(String)
+  mode = Required(Mode)
 
 class Mesos(Struct):
   image = Choice([AppcImage, DockerImage])
+  volumes = Default(List(Volume), [])
 
 
 class Container(Struct):

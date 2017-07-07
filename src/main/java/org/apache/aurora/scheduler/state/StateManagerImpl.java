@@ -16,9 +16,9 @@ package org.apache.aurora.scheduler.state;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 
@@ -27,12 +27,10 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
-import com.google.common.base.Throwables;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 
@@ -55,7 +53,7 @@ import org.apache.aurora.scheduler.storage.TaskStore;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
-import org.apache.mesos.Protos.SlaveID;
+import org.apache.mesos.v1.Protos.AgentID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -164,7 +162,7 @@ public class StateManagerImpl implements StateManager {
       MutableStoreProvider storeProvider,
       String taskId,
       String slaveHost,
-      SlaveID slaveId,
+      AgentID slaveId,
       Function<IAssignedTask, IAssignedTask> resourceAssigner) {
 
     checkNotBlank(taskId);
@@ -191,7 +189,9 @@ public class StateManagerImpl implements StateManager {
 
     Preconditions.checkState(
         changeResult == SUCCESS,
-        "Attempt to assign task " + taskId + " to " + slaveHost + " failed");
+        "Attempt to assign task %s to %s failed",
+        taskId,
+        slaveHost);
 
     return mutated.getAssignedTask();
   }
@@ -203,7 +203,7 @@ public class StateManagerImpl implements StateManager {
           return InetAddress.getLocalHost().getHostName();
         } catch (UnknownHostException e) {
           LOG.error("Failed to get self hostname.");
-          throw Throwables.propagate(e);
+          throw new RuntimeException(e);
         }
       });
 
@@ -286,7 +286,8 @@ public class StateManagerImpl implements StateManager {
         case SAVE_STATE:
           Preconditions.checkState(
               upToDateTask.isPresent(),
-              "Operation expected task " + taskId + " to be present.");
+              "Operation expected task %s to be present.",
+              taskId);
 
           Optional<IScheduledTask> mutated = taskStore.mutateTask(taskId, task1 -> {
             ScheduledTask mutableTask = task1.newBuilder();
@@ -304,7 +305,8 @@ public class StateManagerImpl implements StateManager {
         case RESCHEDULE:
           Preconditions.checkState(
               upToDateTask.isPresent(),
-              "Operation expected task " + taskId + " to be present.");
+              "Operation expected task %s to be present.",
+              taskId);
           LOG.info("Task being rescheduled: " + taskId);
 
           ScheduleStatus newState;
@@ -341,9 +343,13 @@ public class StateManagerImpl implements StateManager {
         case DELETE:
           Preconditions.checkState(
               upToDateTask.isPresent(),
-              "Operation expected task " + taskId + " to be present.");
+              "Operation expected task %s to be present.",
+              taskId);
 
-          events.add(deleteTasks(taskStore, ImmutableSet.of(taskId)));
+          PubsubEvent.TasksDeleted event = createDeleteEvent(taskStore, ImmutableSet.of(taskId));
+          taskStore.deleteTasks(
+              event.getTasks().stream().map(Tasks::id).collect(Collectors.toSet()));
+          events.add(event);
           break;
 
         default:
@@ -365,23 +371,20 @@ public class StateManagerImpl implements StateManager {
 
   @Override
   public void deleteTasks(MutableStoreProvider storeProvider, final Set<String> taskIds) {
-    Map<String, IScheduledTask> tasks = Maps.uniqueIndex(
-        storeProvider.getTaskStore().fetchTasks(Query.taskScoped(taskIds)),
-        Tasks::id);
+    TaskStore.Mutable taskStore = storeProvider.getUnsafeTaskStore();
+    // Create a single event for all task deletions.
+    PubsubEvent.TasksDeleted event = createDeleteEvent(taskStore, taskIds);
 
-    for (Map.Entry<String, IScheduledTask> entry : tasks.entrySet()) {
-      updateTaskAndExternalState(
-          storeProvider.getUnsafeTaskStore(),
-          entry.getKey(),
-          Optional.of(entry.getValue()),
-          Optional.absent(),
-          Optional.absent());
-    }
+    taskStore.deleteTasks(event.getTasks().stream().map(Tasks::id).collect(Collectors.toSet()));
+
+    eventSink.post(event);
   }
 
-  private static PubsubEvent deleteTasks(TaskStore.Mutable taskStore, Set<String> taskIds) {
-    Iterable<IScheduledTask> tasks = taskStore.fetchTasks(Query.taskScoped(taskIds));
-    taskStore.deleteTasks(taskIds);
-    return new PubsubEvent.TasksDeleted(ImmutableSet.copyOf(tasks));
+  private static PubsubEvent.TasksDeleted createDeleteEvent(
+      TaskStore.Mutable taskStore,
+      Set<String> taskIds) {
+
+    return new PubsubEvent.TasksDeleted(
+        ImmutableSet.copyOf(taskStore.fetchTasks(Query.taskScoped(taskIds))));
   }
 }

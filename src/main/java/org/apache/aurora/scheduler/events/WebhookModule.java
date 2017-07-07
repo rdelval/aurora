@@ -19,7 +19,6 @@ import java.nio.charset.StandardCharsets;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
-import com.google.common.base.Throwables;
 import com.google.common.io.Files;
 import com.google.common.io.Resources;
 import com.google.inject.AbstractModule;
@@ -30,9 +29,9 @@ import org.apache.aurora.common.args.Arg;
 import org.apache.aurora.common.args.CmdLine;
 import org.apache.aurora.common.args.constraints.CanRead;
 import org.apache.aurora.common.args.constraints.Exists;
-import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.conn.ConnectionKeepAliveStrategy;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.codehaus.jackson.map.ObjectMapper;
@@ -78,7 +77,7 @@ public class WebhookModule extends AbstractModule {
           .setSocketTimeout(timeout) // wait for data after connection was established.
           .build();
       ConnectionKeepAliveStrategy connectionStrategy = new DefaultConnectionKeepAliveStrategy();
-      HttpClient client =
+      CloseableHttpClient client =
           HttpClientBuilder.create()
               .setDefaultRequestConfig(config)
               // being explicit about using default Keep-Alive strategy.
@@ -86,7 +85,7 @@ public class WebhookModule extends AbstractModule {
               .build();
 
       bind(WebhookInfo.class).toInstance(webhookInfo);
-      bind(HttpClient.class).toInstance(client);
+      bind(CloseableHttpClient.class).toInstance(client);
       PubsubEventModule.bindSubscriber(binder(), Webhook.class);
       bind(Webhook.class).in(Singleton.class);
     }
@@ -102,7 +101,7 @@ public class WebhookModule extends AbstractModule {
               StandardCharsets.UTF_8);
     } catch (IOException e) {
       LOG.error("Error loading webhook configuration file.");
-      throw Throwables.propagate(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -113,7 +112,7 @@ public class WebhookModule extends AbstractModule {
       return new ObjectMapper().readValue(config, WebhookInfo.class);
     } catch (IOException e) {
       LOG.error("Error parsing Webhook configuration file.");
-      throw Throwables.propagate(e);
+      throw new RuntimeException(e);
     }
   }
 }

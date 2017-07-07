@@ -17,7 +17,7 @@ set -o errexit
 set -o nounset
 set -o verbose
 
-readonly MESOS_VERSION=1.0.0
+readonly MESOS_VERSION=1.2.0
 
 function remove_unused {
   # The default ubuntu/trusty64 image includes juju-core, which adds ~300 MB to our image.
@@ -36,6 +36,7 @@ function install_base_packages {
       jq \
       libapr1-dev \
       libcurl4-nss-dev \
+      libffi-dev \
       libsasl2-dev \
       libsvn-dev \
       openjdk-8-jdk-headless \
@@ -57,6 +58,7 @@ function install_docker {
     linux-image-extra-$(uname -r) \
     apparmor \
     docker-engine
+  docker run -d -p 5000:5000 --restart=always --name registry registry:2
 }
 
 function install_docker2aci {

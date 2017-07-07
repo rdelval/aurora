@@ -33,7 +33,6 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
@@ -207,6 +206,7 @@ public class JettyServerModule extends AbstractModule {
       "pendingtasks",
       "quotas",
       "slaves",
+      "state",
       "tiers",
       "utilization"
   );
@@ -228,6 +228,7 @@ public class JettyServerModule extends AbstractModule {
           .put(Quotas.class, "quotas")
           .put(Services.class, "services")
           .put(StructDump.class, "structdump")
+          .put(State.class, "state")
           .put(ThreadStackPrinter.class, "threads")
           .put(Tiers.class, "tiers")
           .put(TimeSeriesDataSource.class, "graphdata")
@@ -355,7 +356,7 @@ public class JettyServerModule extends AbstractModule {
     public HostAndPort getAddress() {
       Preconditions.checkState(state() == State.RUNNING);
       return HostAndPort.fromParts(
-          advertisedHostOverride.or(serverAddress.getHostText()),
+          advertisedHostOverride.or(serverAddress.getHost()),
           serverAddress.getPort());
     }
 
@@ -390,7 +391,7 @@ public class JettyServerModule extends AbstractModule {
         connector.open();
         server.start();
       } catch (Exception e) {
-        throw Throwables.propagate(e);
+        throw new RuntimeException(e);
       }
 
       String host;

@@ -37,7 +37,7 @@ import org.apache.aurora.scheduler.state.StateManager;
 import org.apache.aurora.scheduler.stats.CachedCounters;
 import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.Storage.MutateWork.NoResult;
-import org.apache.mesos.Protos.TaskStatus;
+import org.apache.mesos.v1.Protos.TaskStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,8 +61,6 @@ public class TaskStatusHandlerImpl extends AbstractExecutionThreadService
 
   @VisibleForTesting
   static final String DISK_LIMIT_DISPLAY = "Task used more disk than requested.";
-
-  private static final String STATUS_STAT_FORMAT = "status_update_%s_%s";
 
   private final Storage storage;
   private final StateManager stateManager;
@@ -181,7 +179,7 @@ public class TaskStatusHandlerImpl extends AbstractExecutionThreadService
 
   @VisibleForTesting
   static String statName(TaskStatus status, StateChangeResult result) {
-    return String.format(STATUS_STAT_FORMAT, status.getReason(), result);
+    return "status_update_" + status.getReason() + "_" + result;
   }
 
   private static Optional<String> formatMessage(TaskStatus status) {

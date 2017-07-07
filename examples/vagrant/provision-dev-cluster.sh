@@ -51,8 +51,9 @@ EOF
   chown vagrant:vagrant /home/vagrant/.netrc
 }
 
-function sudoless_docker_setup {
+function docker_setup {
   gpasswd -a vagrant docker
+  echo 'DOCKER_OPTS="--storage-driver=aufs"' | sudo tee --append /etc/default/docker
   service docker restart
 }
 
@@ -97,8 +98,8 @@ prepare_sources
 prepare_extras
 install_cluster_config
 install_ssh_config
-install_docker_compose
+#install_docker_compose
 start_services
 configure_netrc
-sudoless_docker_setup
+docker_setup
 su vagrant -c "aurorabuild all"

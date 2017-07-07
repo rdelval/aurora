@@ -13,13 +13,16 @@
  */
 package org.apache.aurora.scheduler;
 
+import java.time.Instant;
 import java.util.Objects;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Optional;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 
+import org.apache.aurora.scheduler.base.Conversions;
 import org.apache.aurora.scheduler.resources.ResourceBag;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 
@@ -27,7 +30,7 @@ import static java.util.Objects.requireNonNull;
 
 import static org.apache.aurora.scheduler.resources.ResourceManager.bagFromMesosResources;
 import static org.apache.aurora.scheduler.resources.ResourceManager.getOfferResources;
-import static org.apache.mesos.Protos.Offer;
+import static org.apache.mesos.v1.Protos.Offer;
 
 /**
  * An available resource in the cluster.
@@ -59,6 +62,14 @@ public class HostOffer {
 
   public ResourceBag getResourceBag(TierInfo tierInfo) {
     return resourceBagCache.getUnchecked(tierInfo);
+  }
+
+  public Optional<Instant> getUnavailabilityStart() {
+    if (offer.hasUnavailability()) {
+      return Optional.of(Conversions.getStart(offer.getUnavailability()));
+    } else {
+      return Optional.absent();
+    }
   }
 
   @Override

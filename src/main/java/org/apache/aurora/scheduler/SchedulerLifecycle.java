@@ -32,7 +32,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Supplier;
-import com.google.common.base.Throwables;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.util.concurrent.Atomics;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -171,9 +170,6 @@ public class SchedulerLifecycle implements EventSubscriber {
   }
 
   @VisibleForTesting
-  static final String REGISTERED_GAUGE = "framework_registered";
-
-  @VisibleForTesting
   static String stateGaugeName(State state) {
     return "scheduler_lifecycle_" + state;
   }
@@ -194,14 +190,6 @@ public class SchedulerLifecycle implements EventSubscriber {
     requireNonNull(delayedActions);
     requireNonNull(shutdownRegistry);
 
-    statsProvider.makeGauge(
-        REGISTERED_GAUGE,
-        new Supplier<Integer>() {
-          @Override
-          public Integer get() {
-            return registrationAcked.get() ? 1 : 0;
-          }
-        });
     for (final State state : State.values()) {
       statsProvider.makeGauge(
           stateGaugeName(state),
@@ -274,7 +262,7 @@ public class SchedulerLifecycle implements EventSubscriber {
           leaderControl.get().advertise();
         } catch (SingletonService.AdvertiseException | InterruptedException e) {
           LOG.error("Failed to advertise leader, shutting down.");
-          throw Throwables.propagate(e);
+          throw new RuntimeException(e);
         }
       }
     };
