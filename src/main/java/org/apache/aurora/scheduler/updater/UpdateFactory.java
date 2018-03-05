@@ -88,6 +88,10 @@ interface UpdateFactory {
       checkArgument(
           settings.getUpdateGroupSize() > 0,
           "Update group size must be positive.");
+      checkArgument(
+          settings.getVariableUpdateGroupSize().stream().allMatch(x -> x > 0),
+          "Variable update group size steps must all be positive."
+      );
 
       Set<Integer> currentInstances = expandInstanceIds(instructions.getInitialState());
       Set<Integer> desiredInstances = instructions.isSetDesiredState()
@@ -125,7 +129,7 @@ interface UpdateFactory {
       // Order of preference is Variable Batch, Batch, then Queue
       UpdateStrategy<Integer> strategy;
       if (settings.getVariableUpdateGroupSize().size() > 0) {
-        strategy = new VariableBatchStrategy<>(updateOrder, settings.getVariableUpdateGroupSize(), storage, jobUpdate.getSummary().getKey());
+        strategy = new VariableBatchStrategy<>(updateOrder, settings.getVariableUpdateGroupSize(), rollingForward, storage, jobUpdate.getSummary().getKey());
       } else if (settings.isWaitForBatchCompletion()) {
         strategy = new BatchStrategy<>(updateOrder, settings.getUpdateGroupSize());
       } else {

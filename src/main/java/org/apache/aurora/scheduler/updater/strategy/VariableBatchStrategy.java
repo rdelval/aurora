@@ -40,6 +40,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   private final Storage storage;
   private final IJobUpdateKey key;
   protected final List<Integer> maxActive;
+  private final boolean rollingForward;
 
   private int curStep;
 
@@ -49,10 +50,11 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
    * @param maxActive  List of Maximum number of values to return from. Each represents a step.
    * {@link #getNextGroup(Set, Set)}.
    */
-  public VariableBatchStrategy(Ordering<T> ordering, List<Integer> maxActive, Storage storage, IJobUpdateKey key) {
+  public VariableBatchStrategy(Ordering<T> ordering, List<Integer> maxActive, boolean rollingForward, Storage storage, IJobUpdateKey key) {
     this.ordering = Objects.requireNonNull(ordering);
     this.storage = Objects.requireNonNull(storage);
     this.key = Objects.requireNonNull(key);
+    this.rollingForward = rollingForward;
 
     maxActive.forEach(x -> Preconditions.checkArgument(x > 0));
     this.maxActive = maxActive;
@@ -95,8 +97,12 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
    */
   Set<T> doGetNextGroup(Set<T> idle, Set<T> active) {
     if (active.isEmpty()) {
-      // Move on to the next batch size if we completed our current one.
-     ++curStep;
+
+      if (this.rollingForward) {
+        ++curStep;
+      } else {
+        --curStep;
+      }
 
       // Store current step
       storage.write((NoResult.Quiet) storeProvider -> {
