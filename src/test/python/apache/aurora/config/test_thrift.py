@@ -310,11 +310,12 @@ def test_config_with_duplicate_metadata():
                               for key_value in tti.metadata)
   assert metadata_tuples == expected_metadata_tuples
 
+
 def test_config_with_implicit_thermos_executor_config():
-  job = convert_pystachio_to_thrift(
-      HELLO_WORLD())
+  job = convert_pystachio_to_thrift(HELLO_WORLD())
 
   assert str(job.taskConfig.executorConfig.name) == AURORA_EXECUTOR_NAME
+
 
 def test_config_with_explicit_thermos_executor_config():
   job = convert_pystachio_to_thrift(
@@ -325,11 +326,12 @@ def test_config_with_explicit_thermos_executor_config():
 
 def test_config_with_custom_executor_config():
   job = convert_pystachio_to_thrift(
-      HELLO_WORLD(executor_config=
-                  ExecutorConfig(name="CustomExecutor", data="{test:'payload'}")))
+      HELLO_WORLD(executor_config=ExecutorConfig(
+          name="CustomExecutor", data="{test:'payload'}")))
 
   assert str(job.taskConfig.executorConfig.name) == "CustomExecutor"
   assert str(job.taskConfig.executorConfig.data) == "{test:'payload'}"
+
 
 def test_task_instance_from_job():
   instance = task_instance_from_job(
@@ -349,4 +351,3 @@ def test_mesos_hostname_in_task():
   hw = HELLO_WORLD(task=Task(name="{{mesos.hostname}}"))
   instance = task_instance_from_job(hw, 0, 'test_host')
   assert str(instance.task().name()) == 'test_host'
-
