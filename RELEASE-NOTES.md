@@ -3,8 +3,8 @@
 
 ### New/updated:
 - Added `executor_config` field to the Job object of the DSL which will populate
-  `TaskConfig.executorConfig`. This allows for using custom executors defined through the
-  `---custom_executor_config` scheduler flag. See our
+  `JobConfiguration.TaskConfig.ExecutorConfig`. This allows for using custom executors defined
+  through the `---custom_executor_config` scheduler flag. See our
   [custom-executors](docs/features/custom-executors.md) documentation for more information.
 
 0.20.0
