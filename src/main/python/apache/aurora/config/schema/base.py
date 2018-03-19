@@ -166,7 +166,7 @@ class Metadata(Struct):
 
 class ExecutorConfig(Struct):
   name = Default(String, AURORA_EXECUTOR_NAME)
-  data = String
+  data = Default(String, "")
 
 class MesosJob(Struct):
   name          = Default(String, '{{task.name}}')
