@@ -13,6 +13,7 @@
  */
 package org.apache.aurora.scheduler.updater.strategy;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.util.List;
 import java.util.Objects;
@@ -39,10 +40,10 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   private final Ordering<T> ordering;
   private final Storage storage;
   private final IJobUpdateKey key;
-  protected final List<Integer> maxActive;
+  protected final ImmutableList<Integer> maxActive;
   private final boolean rollingForward;
 
-  private int curStep;
+  private final int totalInstanceCount;
 
   /**
    * Creates an variable active-limited strategy that applies an upper bound to all results.
@@ -57,31 +58,42 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     this.rollingForward = rollingForward;
 
     maxActive.forEach(x -> Preconditions.checkArgument(x > 0));
-    this.maxActive = maxActive;
 
-    // Attempt to read current step from Storage, if not found start at the beginning.
-    this.curStep = storage.read(storeProvider -> {
-      Optional<IJobUpdateDetails> updateDetails = storeProvider.getJobUpdateStore().fetchJobUpdate(key);
 
-      if (updateDetails.isPresent()){
-        IJobUpdateDetails details = updateDetails.get();
+    int acc = 0;
+    for (int step : maxActive) {
+      Preconditions.checkArgument(step > 0);
+      acc += step;
+    }
 
-        if (details.isSetUpdate() &&
-            details.getUpdate().isSetSummary() &&
-            details.getUpdate().getSummary().isSetState()) {
-          return updateDetails.get().getUpdate().getSummary().getState().getVariableUpdateGroupStep();
-        }
-      }
-
-      return 0;
-    });
-
+    this.maxActive = ImmutableList.copyOf(maxActive);
+    this.totalInstanceCount = acc;
 
   }
 
   @Override
   public final Set<T> getNextGroup(Set<T> idle, Set<T> active) {
-    int step = curStep; // Keep current step we're in since doGetNextGroup may increase it.
+
+
+    // Calculate which step where in by finding out how many instances we have left to update
+    int scheduled = totalInstanceCount - idle.size();
+    int pending = totalInstanceCount - scheduled;
+
+    int step = 0;
+
+    System.out.printf("Currently there are %d pending, %d scheduled,, %d active, %d idle, and %d total.\n", pending, scheduled, active.size(), idle.size(), totalInstanceCount);
+
+    if (pending == 0) {
+      step = maxActive.size()-1;
+    } else {
+      int sum = 0;
+      while (sum < scheduled) {
+        sum += maxActive.get(step);
+
+        ++step;
+      }
+    }
+
     return ordering.sortedCopy(doGetNextGroup(idle, active)).stream()
             .limit(Math.max(0, maxActive.get(step) - active.size()))
             .collect(Collectors.toSet());
@@ -96,19 +108,19 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
    * @return A subset of {@code idle}, instances to start updating.
    */
   Set<T> doGetNextGroup(Set<T> idle, Set<T> active) {
+
+
+    int total = idle.size() + active.size();
+
+    System.out.printf("Currently there are %d active, %d idle, and %d total.\n", active.size(), idle.size(), total);
+
     if (active.isEmpty()) {
 
-      if (this.rollingForward) {
+/*      if (this.rollingForward) {
         ++curStep;
       } else {
         --curStep;
-      }
-
-      // Store current step
-      storage.write((NoResult.Quiet) storeProvider -> {
-        Mutable storeUpdate = storeProvider.getJobUpdateStore();
-        storeUpdate.saveJobUpdateBatchStep(this.key, this.curStep);
-      });
+      } */
 
       return idle;
     } else {
