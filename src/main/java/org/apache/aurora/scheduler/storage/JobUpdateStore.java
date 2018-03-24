@@ -89,8 +89,6 @@ public interface JobUpdateStore {
      */
     void saveJobInstanceUpdateEvent(IJobUpdateKey key, IJobInstanceUpdateEvent event);
 
-    void saveJobUpdateBatchStep(IJobUpdateKey key, int step);
-
     /**
      * Deletes job updates.
      *

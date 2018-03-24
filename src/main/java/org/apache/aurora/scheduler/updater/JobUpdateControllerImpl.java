@@ -47,7 +47,6 @@ import org.apache.aurora.common.util.Clock;
 import org.apache.aurora.gen.JobInstanceUpdateEvent;
 import org.apache.aurora.gen.JobUpdateAction;
 import org.apache.aurora.gen.JobUpdateEvent;
-import org.apache.aurora.gen.JobUpdateKey;
 import org.apache.aurora.gen.JobUpdatePulseStatus;
 import org.apache.aurora.gen.JobUpdateQuery;
 import org.apache.aurora.gen.JobUpdateStatus;
@@ -192,7 +191,7 @@ class JobUpdateControllerImpl implements JobUpdateController {
       IJobKey job = summary.getKey().getJob();
 
       // Validate the update configuration by making sure we can create an updater for it.
-      updateFactory.newUpdate(update, true, storage);
+      updateFactory.newUpdate(update.getInstructions(), true);
 
       if (instructions.getInitialState().isEmpty() && !instructions.isSetDesiredState()) {
         throw new IllegalArgumentException("Update instruction is a no-op.");
@@ -524,7 +523,7 @@ class JobUpdateControllerImpl implements JobUpdateController {
       IJobUpdate jobUpdate = updateStore.fetchJobUpdate(key).get().getUpdate();
       UpdateFactory.Update update;
       try {
-        update = updateFactory.newUpdate(jobUpdate, action == ROLL_FORWARD, this.storage);
+        update = updateFactory.newUpdate(jobUpdate.getInstructions(), action == ROLL_FORWARD);
       } catch (RuntimeException e) {
         LOG.warn("Uncaught exception: " + e, e);
         changeJobUpdateStatus(
@@ -551,7 +550,6 @@ class JobUpdateControllerImpl implements JobUpdateController {
     return Optional.ofNullable(Iterables.getOnlyElement(
         taskStore.fetchTasks(Query.instanceScoped(job, instanceId).active()), null));
   }
-
 
   private static final Set<InstanceUpdateStatus> NOOP_INSTANCE_UPDATE =
       ImmutableSet.of(InstanceUpdateStatus.WORKING, InstanceUpdateStatus.SUCCEEDED);

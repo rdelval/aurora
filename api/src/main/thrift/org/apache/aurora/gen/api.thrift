@@ -806,9 +806,6 @@ struct JobUpdateState {
 
   /** Last modified timestamp in milliseconds. */
   3: i64 lastModifiedTimestampMs
-
-  /** Current step a Variable Update Group is currently in */
-  4: optional i32 variableUpdateGroupStep
 }
 
 /** Summary of the job update including job key, user and current state. */

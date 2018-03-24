@@ -135,7 +135,6 @@ public class MemJobUpdateStore implements JobUpdateStore.Mutable {
       throw new StorageException("Update not found: " + key);
     }
 
-
     JobUpdateDetails mutable = update.newBuilder();
     mutable.addToInstanceEvents(event.newBuilder());
     mutable.setInstanceEvents(INSTANCE_EVENT_ORDERING.sortedCopy(mutable.getInstanceEvents()));
@@ -176,29 +175,7 @@ public class MemJobUpdateStore implements JobUpdateStore.Mutable {
           Longs.max(state.getLastModifiedTimestampMs(), lastInstanceEvent.getTimestampMs()));
     }
 
-
-    if (update.isSetUpdate() &&
-        update.getUpdate().isSetSummary() &&
-        update.getUpdate().getSummary().isSetState()) {
-      state.setVariableUpdateGroupStep(update.getUpdate().getSummary().getState().getVariableUpdateGroupStep());
-    }
-
     return state;
-  }
-
-  @Timed("job_update_store_save_batch_step")
-  @Override
-  public synchronized void saveJobUpdateBatchStep(IJobUpdateKey key, int step) {
-    IJobUpdateDetails update = updates.get(key);
-    if (update == null) {
-      throw new StorageException("Update not found: " + key);
-    }
-
-    JobUpdateDetails mutable = update.newBuilder();
-
-    mutable.getUpdate().getSummary().setState(synthesizeUpdateState(mutable).setVariableUpdateGroupStep(step));
-    updates.put(key, IJobUpdateDetails.build(mutable));
-
   }
 
   private Stream<IJobUpdateDetails> performQuery(IJobUpdateQuery query) {

@@ -59,15 +59,14 @@ interface UpdateFactory {
    * Creates a one-way job updater that will execute the job update configuration in the direction
    * specified by {@code rollingForward}.
    *
-   * @param jobUpdate Update to act on.
+   * @param configuration Configuration to act on.
    * @param rollingForward {@code true} if this is a job update, {@code false} if it is a rollback.
    * @return An updater that will execute the job update as specified in the
    *         {@code configuration}.
    */
   Update newUpdate(
-      IJobUpdate jobUpdate,
-      boolean rollingForward,
-      Storage storage);
+      IJobUpdateInstructions configuration,
+      boolean rollingForward);
 
   class UpdateFactoryImpl implements UpdateFactory {
     private final Clock clock;
@@ -78,8 +77,7 @@ interface UpdateFactory {
     }
 
     @Override
-    public Update newUpdate(IJobUpdate jobUpdate, boolean rollingForward, Storage storage) {
-      IJobUpdateInstructions instructions = jobUpdate.getInstructions();
+    public Update newUpdate(IJobUpdateInstructions instructions, boolean rollingForward) {
       requireNonNull(instructions);
       IJobUpdateSettings settings = instructions.getSettings();
       checkArgument(
@@ -129,7 +127,7 @@ interface UpdateFactory {
       // Order of preference is Variable Batch, Batch, then Queue
       UpdateStrategy<Integer> strategy;
       if (settings.getVariableUpdateGroupSize().size() > 0) {
-        strategy = new VariableBatchStrategy<>(updateOrder, settings.getVariableUpdateGroupSize(), rollingForward, storage, jobUpdate.getSummary().getKey());
+        strategy = new VariableBatchStrategy<>(updateOrder, settings.getVariableUpdateGroupSize(), rollingForward);
       } else if (settings.isWaitForBatchCompletion()) {
         strategy = new BatchStrategy<>(updateOrder, settings.getUpdateGroupSize());
       } else {

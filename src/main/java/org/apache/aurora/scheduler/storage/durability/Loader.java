@@ -18,7 +18,6 @@ import java.util.stream.Stream;
 import org.apache.aurora.gen.HostAttributes;
 import org.apache.aurora.gen.storage.Op;
 import org.apache.aurora.gen.storage.SaveJobInstanceUpdateEvent;
-import org.apache.aurora.gen.storage.SaveJobUpdateBatchStep;
 import org.apache.aurora.gen.storage.SaveJobUpdateEvent;
 import org.apache.aurora.gen.storage.SaveQuota;
 import org.apache.aurora.scheduler.storage.Storage.MutableStoreProvider;
@@ -144,12 +143,6 @@ public final class Loader {
       case REMOVE_JOB_UPDATE:
         stores.getJobUpdateStore().removeJobUpdates(
             IJobUpdateKey.setFromBuilders(op.getRemoveJobUpdate().getKeys()));
-        break;
-
-      case SAVE_JOB_UPDATE_BATCH_STEP:
-        SaveJobUpdateBatchStep batchStepSave = op.getSaveJobUpdateBatchStep();
-        stores.getJobUpdateStore().saveJobUpdateBatchStep(
-            IJobUpdateKey.build(batchStepSave.getKey()), batchStepSave.getStep());
         break;
 
       case SAVE_HOST_MAINTENANCE_REQUEST:
