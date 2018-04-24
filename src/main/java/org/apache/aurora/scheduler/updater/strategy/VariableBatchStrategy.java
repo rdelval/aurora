@@ -15,6 +15,7 @@ package org.apache.aurora.scheduler.updater.strategy;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -38,8 +39,6 @@ import org.apache.aurora.scheduler.storage.entities.IJobUpdateKey;
  */
 public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStrategy<T> {
   private final Ordering<T> ordering;
-  private final Storage storage;
-  private final IJobUpdateKey key;
   protected final ImmutableList<Integer> maxActive;
   private final boolean rollingForward;
 
@@ -51,51 +50,59 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
    * @param maxActive  List of Maximum number of values to return from. Each represents a step.
    * {@link #getNextGroup(Set, Set)}.
    */
-  public VariableBatchStrategy(Ordering<T> ordering, List<Integer> maxActive, boolean rollingForward, Storage storage, IJobUpdateKey key) {
+  public VariableBatchStrategy(Ordering<T> ordering, List<Integer> maxActive, boolean rollingForward) {
     this.ordering = Objects.requireNonNull(ordering);
-    this.storage = Objects.requireNonNull(storage);
-    this.key = Objects.requireNonNull(key);
     this.rollingForward = rollingForward;
 
     maxActive.forEach(x -> Preconditions.checkArgument(x > 0));
-
 
     int acc = 0;
     for (int step : maxActive) {
       Preconditions.checkArgument(step > 0);
       acc += step;
     }
-
-    this.maxActive = ImmutableList.copyOf(maxActive);
     this.totalInstanceCount = acc;
+    this.maxActive = ImmutableList.copyOf(maxActive);
+  }
 
+
+  private final int determineStep(int idle){
+
+    // Calculate which step where in by finding out how many instances we have left to update
+    int scheduled = totalInstanceCount - idle;
+
+    int step = 0;
+    int sum = 0;
+
+    if (rollingForward) {
+      System.out.printf("Currently there are %d scheduled, %d idle, and %d total.\n", scheduled, idle, totalInstanceCount);
+
+      while (sum < scheduled) {
+        sum += maxActive.get(step);
+        ++step;
+      }
+    } else {
+      System.out.printf("Currently there are %d scheduled, %d idle, and %d total.\n", scheduled, idle, totalInstanceCount);
+
+      // Starting with the first step as we're now comparing to idle instead of scheduled
+      // to work backwards from the last step that was executed in the batch steps.
+      sum = maxActive.get(step);
+
+      // TODO(rdelvalle): Consider if it's necessary to handle fractional steps.
+      while (sum < idle) {
+        ++step;
+        sum += maxActive.get(step);
+      }
+    }
+
+    return Math.min(step, maxActive.size()-1);
   }
 
   @Override
   public final Set<T> getNextGroup(Set<T> idle, Set<T> active) {
 
-
-    // Calculate which step where in by finding out how many instances we have left to update
-    int scheduled = totalInstanceCount - idle.size();
-    int pending = totalInstanceCount - scheduled;
-
-    int step = 0;
-
-    System.out.printf("Currently there are %d pending, %d scheduled,, %d active, %d idle, and %d total.\n", pending, scheduled, active.size(), idle.size(), totalInstanceCount);
-
-    if (pending == 0) {
-      step = maxActive.size()-1;
-    } else {
-      int sum = 0;
-      while (sum < scheduled) {
-        sum += maxActive.get(step);
-
-        ++step;
-      }
-    }
-
     return ordering.sortedCopy(doGetNextGroup(idle, active)).stream()
-            .limit(Math.max(0, maxActive.get(step) - active.size()))
+            .limit(Math.max(0, maxActive.get(determineStep(idle.size())) - active.size()))
             .collect(Collectors.toSet());
   }
 
@@ -108,20 +115,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
    * @return A subset of {@code idle}, instances to start updating.
    */
   Set<T> doGetNextGroup(Set<T> idle, Set<T> active) {
-
-
-    int total = idle.size() + active.size();
-
-    System.out.printf("Currently there are %d active, %d idle, and %d total.\n", active.size(), idle.size(), total);
-
     if (active.isEmpty()) {
-
-/*      if (this.rollingForward) {
-        ++curStep;
-      } else {
-        --curStep;
-      } */
-
       return idle;
     } else {
       return ImmutableSet.of();
