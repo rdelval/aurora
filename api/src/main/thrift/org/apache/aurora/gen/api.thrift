@@ -707,6 +707,33 @@ enum JobUpdatePulseStatus {
   FINISHED = 2
 }
 
+
+
+/** An update strategy that will only add more work when the current active group is empty. */
+struct QueueUpdateStrategy {
+  1: i32 groupSize
+}
+
+/** An update strategy that will only add more work when the current active group is empty. */
+struct BatchUpdateStrategy {
+  1: i32 groupSize
+}
+
+/**
+ * An update strategy that will only add more work when the current active group is empty.
+ * Once an active group is empty, the size of the next active group is allowed to change
+ * using this strategy.
+ */
+struct VariableBatchUpdateStrategy {
+  1: set<i32> groupSizes
+}
+
+union JobUpdateStrategy {
+  1: QueueUpdateStrategy queueUpdateStrategy
+  2: BatchUpdateStrategy batchUpdateStrategy
+  3: VariableBatchUpdateStrategy variableBatchUpdateStrategy
+}
+
 /** Job update key. */
 struct JobUpdateKey {
   /** Job being updated */
@@ -718,6 +745,8 @@ struct JobUpdateKey {
 
 /** Job update thresholds and limits. */
 struct JobUpdateSettings {
+
+  /** TODO(rdelvalle): Deprecated, please set updateGroupSize inside of desired update strategy. */
   /** Max number of instances being updated at any given moment. */
   1: i32 updateGroupSize
 
@@ -736,6 +765,7 @@ struct JobUpdateSettings {
   /** Instance IDs to act on. All instances will be affected if this is not set. */
   7: set<Range> updateOnlyTheseInstances
 
+  /** TODO(rdelvalle): Deprecated, please use the BatchUpdateStrategy instead. */
   /**
    * If true, use updateGroupSize as strict batching boundaries, and avoid proceeding to another
    * batch until the preceding batch finishes updating.
@@ -751,10 +781,9 @@ struct JobUpdateSettings {
   9: optional i32 blockIfNoPulsesAfterMs
 
   /**
-   * This list contains the number of instances that each batch will complete before moving on to
-   * the next. This field creates an update that behaves like waitForBatchCompletion.
-  **/
-  10: optional list<i32> variableUpdateGroupSize
+   *  Sets the update strategy to use for this update.
+   */
+  10: JobUpdateStrategy updateStrategy
 }
 
 /** Event marking a state transition in job update lifecycle. */
