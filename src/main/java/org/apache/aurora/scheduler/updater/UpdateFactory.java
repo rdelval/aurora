@@ -29,9 +29,7 @@ import org.apache.aurora.common.quantity.Amount;
 import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.util.Clock;
 import org.apache.aurora.gen.JobUpdateStatus;
-import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.entities.IInstanceTaskConfig;
-import org.apache.aurora.scheduler.storage.entities.IJobUpdate;
 import org.apache.aurora.scheduler.storage.entities.IJobUpdateInstructions;
 import org.apache.aurora.scheduler.storage.entities.IJobUpdateSettings;
 import org.apache.aurora.scheduler.storage.entities.IRange;
@@ -80,16 +78,10 @@ interface UpdateFactory {
     public Update newUpdate(IJobUpdateInstructions instructions, boolean rollingForward) {
       requireNonNull(instructions);
       IJobUpdateSettings settings = instructions.getSettings();
+
       checkArgument(
           settings.getMinWaitInInstanceRunningMs() >= 0,
           "Min wait in running must be non-negative.");
-      checkArgument(
-          settings.getUpdateGroupSize() > 0,
-          "Update group size must be positive.");
-      checkArgument(
-          settings.getVariableUpdateGroupSize().stream().allMatch(x -> x > 0),
-          "Variable update group size steps must all be positive."
-      );
 
       Set<Integer> currentInstances = expandInstanceIds(instructions.getInitialState());
       Set<Integer> desiredInstances = instructions.isSetDesiredState()
@@ -124,14 +116,23 @@ interface UpdateFactory {
           ? updateOrdering
           : updateOrdering.reverse();
 
-      // Order of preference is Variable Batch, Batch, then Queue
-      UpdateStrategy<Integer> strategy;
-      if (settings.getVariableUpdateGroupSize().size() > 0) {
-        strategy = new VariableBatchStrategy<>(updateOrder, settings.getVariableUpdateGroupSize(), rollingForward);
-      } else if (settings.isWaitForBatchCompletion()) {
-        strategy = new BatchStrategy<>(updateOrder, settings.getUpdateGroupSize());
-      } else {
-        strategy = new QueueStrategy<>(updateOrder, settings.getUpdateGroupSize());
+      UpdateStrategy<Integer> updateStrategy;
+
+      switch(settings.getUpdateStrategyType()) {
+          case VARIABLE_BATCH:
+            updateStrategy =
+                new VariableBatchStrategy<>(updateOrder, settings.getGroupSizes(), rollingForward);
+            break;
+
+          case BATCH:
+            updateStrategy = new BatchStrategy<>(updateOrder, settings.getGroupSizes().get(0));
+            break;
+
+          case QUEUE:
+          default:
+            // Verification that the update strategy has already taken place when we receive
+            // the thrift call.
+            updateStrategy = new QueueStrategy<>(updateOrder, settings.getGroupSizes().get(0));
       }
 
       JobUpdateStatus successStatus =
@@ -142,7 +143,7 @@ interface UpdateFactory {
 
       return new Update(
           new OneWayJobUpdater<>(
-              strategy,
+              updateStrategy,
               settings.getMaxFailedInstances(),
               evaluators.build()),
           successStatus,

@@ -15,22 +15,17 @@ package org.apache.aurora.scheduler.updater.strategy;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import java.util.Collections;
+
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Ordering;
 import java.util.stream.Collectors;
-import org.apache.aurora.scheduler.storage.JobUpdateStore;
-import org.apache.aurora.scheduler.storage.JobUpdateStore.Mutable;
-import org.apache.aurora.scheduler.storage.Storage;
-import org.apache.aurora.scheduler.storage.Storage.MutateWork.NoResult;
-import org.apache.aurora.scheduler.storage.Storage.Util;
-import org.apache.aurora.scheduler.storage.entities.IJobUpdateDetails;
-import org.apache.aurora.scheduler.storage.entities.IJobUpdateKey;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A strategy that limits the number of instances selected by the subclass using variable steps.
@@ -39,32 +34,33 @@ import org.apache.aurora.scheduler.storage.entities.IJobUpdateKey;
  */
 public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStrategy<T> {
   private final Ordering<T> ordering;
-  protected final ImmutableList<Integer> maxActive;
+  protected final ImmutableList<Integer> maxActiveGroups;
+
   private final boolean rollingForward;
 
   private final int totalInstanceCount;
 
+  private static final Logger LOG = LoggerFactory.getLogger(VariableBatchStrategy.class);
+
   /**
    * Creates an variable active-limited strategy that applies an upper bound to all results.
    *
-   * @param maxActive  List of Maximum number of values to return from. Each represents a step.
+   * @param maxActiveGroups  List of Maximum number of values to return from. Each represents a step.
    * {@link #getNextGroup(Set, Set)}.
    */
-  public VariableBatchStrategy(Ordering<T> ordering, List<Integer> maxActive, boolean rollingForward) {
+  public VariableBatchStrategy(Ordering<T> ordering, List<Integer> maxActiveGroups, boolean rollingForward) {
     this.ordering = Objects.requireNonNull(ordering);
     this.rollingForward = rollingForward;
 
-    maxActive.forEach(x -> Preconditions.checkArgument(x > 0));
+    maxActiveGroups.forEach(x -> Preconditions.checkArgument(x > 0));
 
     int acc = 0;
-    for (int step : maxActive) {
-      Preconditions.checkArgument(step > 0);
+    for (int step : maxActiveGroups) {
       acc += step;
     }
     this.totalInstanceCount = acc;
-    this.maxActive = ImmutableList.copyOf(maxActive);
+    this.maxActiveGroups = ImmutableList.copyOf(maxActiveGroups);
   }
-
 
   private final int determineStep(int idle){
 
@@ -75,39 +71,39 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     int sum = 0;
 
     if (rollingForward) {
-      System.out.printf("Currently there are %d scheduled, %d idle, and %d total.\n", scheduled, idle, totalInstanceCount);
+      LOG.info("Currently there are %d scheduled, %d idle, and %d total.\n", scheduled, idle, totalInstanceCount);
 
       while (sum < scheduled) {
-        sum += maxActive.get(step);
+        sum += maxActiveGroups.get(step);
         ++step;
       }
     } else {
-      System.out.printf("Currently there are %d scheduled, %d idle, and %d total.\n", scheduled, idle, totalInstanceCount);
+      LOG.info("Currently there are %d scheduled, %d idle, and %d total.\n", scheduled, idle, totalInstanceCount);
 
       // Starting with the first step as we're now comparing to idle instead of scheduled
       // to work backwards from the last step that was executed in the batch steps.
-      sum = maxActive.get(step);
+      sum = maxActiveGroups.get(step);
 
-      // TODO(rdelvalle): Consider if it's necessary to handle fractional steps.
+      // TODO(rdelvalle): Consider if it's necessary to handle fractional steps. (i.e. halfway between step 0 and 1)
       while (sum < idle) {
         ++step;
-        sum += maxActive.get(step);
+        sum += maxActiveGroups.get(step);
       }
     }
 
-    return Math.min(step, maxActive.size()-1);
+    return Math.min(step, maxActiveGroups.size()-1);
   }
 
   @Override
   public final Set<T> getNextGroup(Set<T> idle, Set<T> active) {
 
     return ordering.sortedCopy(doGetNextGroup(idle, active)).stream()
-            .limit(Math.max(0, maxActive.get(determineStep(idle.size())) - active.size()))
+            .limit(Math.max(0, maxActiveGroups.get(determineStep(idle.size())) - active.size()))
             .collect(Collectors.toSet());
   }
 
   /**
-   * Return a list of instances to be updated. If the result is larger than {@link #maxActive},
+   * Return a list of instances to be updated. If the result is larger than {@link #maxActiveGroups},
    * it will be truncated.
    *
    * @param idle Idle instances, candidate for being updated.

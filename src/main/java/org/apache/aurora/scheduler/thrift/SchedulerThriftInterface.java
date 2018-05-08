@@ -53,6 +53,7 @@ import org.apache.aurora.gen.JobUpdatePulseStatus;
 import org.apache.aurora.gen.JobUpdateQuery;
 import org.apache.aurora.gen.JobUpdateRequest;
 import org.apache.aurora.gen.JobUpdateSettings;
+import org.apache.aurora.gen.JobUpdateStrategyType;
 import org.apache.aurora.gen.JobUpdateSummary;
 import org.apache.aurora.gen.ListBackupsResult;
 import org.apache.aurora.gen.MaintenanceStatusResult;
@@ -794,17 +795,54 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
 
     JobUpdateSettings settings = requireNonNull(mutableRequest.getSettings());
 
-    if (settings.isSetVariableUpdateGroupSize()) {
-      if (settings.getVariableUpdateGroupSize().stream().anyMatch(x -> x <= 0)) {
-        return invalidRequest(INVALID_GROUP_STEP_SIZE);
+    // Determine update strategy based upon waitForBatchCompletion if strategy type is not set
+    if(!settings.isSetUpdateStrategyType()) {
+      if(settings.isWaitForBatchCompletion()) {
+        settings.setUpdateStrategyType(JobUpdateStrategyType.BATCH);
+      } else {
+        settings.setUpdateStrategyType(JobUpdateStrategyType.QUEUE);
       }
+    }
 
-      if (settings.getVariableUpdateGroupSize().stream().reduce(0, Integer::sum) <= 0) {
-          return invalidRequest(INVALID_STEPS_SUMMATION);
-      }
+    // Convert old format to new format of update strategy
+    switch(settings.getUpdateStrategyType()) {
 
-    } else if (settings.getUpdateGroupSize() <= 0) {
+      case VARIABLE_BATCH:
+        // Noop, just confirming this strategy is valid.
+        break;
+
+      case BATCH:
+      case QUEUE:
+        if(settings.isSetGroupSizes()) {
+          if(settings.getGroupSizes().size() > 1) {
+            return invalidRequest(TOO_MANY_STEPS);
+          }
+        } else {
+          settings.setGroupSizes(ImmutableList.of(settings.getUpdateGroupSize()));
+        }
+        break;
+
+      default:
+        return invalidRequest(UNKNOWN_UPDATE_STRATEGY);
+    }
+
+    if(settings.getGroupSizes().size() == 0) {
+      return invalidRequest(TOO_FEW_STEPS);
+    }
+
+    if (settings.getGroupSizes().stream().anyMatch(x -> x <= 0)) {
       return invalidRequest(INVALID_GROUP_SIZE);
+    }
+
+    int totalInstances = settings.getGroupSizes().stream().reduce(0, Integer::sum);
+
+    if (totalInstances <= 0) {
+      return invalidRequest(INVALID_INSTANCE_COUNT);
+    }
+
+    if (settings.getMaxPerInstanceFailures() * totalInstances
+        > thresholds.getMaxUpdateInstanceFailures()) {
+      return invalidRequest(TOO_MANY_POTENTIAL_FAILED_INSTANCES);
     }
 
     if (settings.getMaxPerInstanceFailures() < 0) {
@@ -813,11 +851,6 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
 
     if (settings.getMaxFailedInstances() < 0) {
       return invalidRequest(INVALID_MAX_FAILED_INSTANCES);
-    }
-
-    if (settings.getMaxPerInstanceFailures() * mutableRequest.getInstanceCount()
-            > thresholds.getMaxUpdateInstanceFailures()) {
-      return invalidRequest(TOO_MANY_POTENTIAL_FAILED_INSTANCES);
     }
 
     if (settings.getMinWaitInInstanceRunningMs() < 0) {
@@ -1056,11 +1089,14 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
   static final String NON_SERVICE_TASK = "Updates are not supported for non-service tasks.";
 
   @VisibleForTesting
-  static final String INVALID_GROUP_SIZE = "updateGroupSize must be positive.";
+  static final String INVALID_GROUP_SIZE = "All update group sizes must be positive.";
 
   @VisibleForTesting
-  static final String INVALID_GROUP_STEP_SIZE =
-      "All steps in variableUpdateGroupSize must be positive.";
+  static final String TOO_MANY_STEPS = "This strategy only supports a single group size step.";
+
+  @VisibleForTesting
+  static final String TOO_FEW_STEPS = "One or more steps must be included as "
+      + "part of chosen update strategy.";
 
   @VisibleForTesting
   static final String INVALID_MAX_FAILED_INSTANCES = "maxFailedInstances must be non-negative.";
@@ -1087,5 +1123,5 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
   static final String INVALID_INSTANCE_COUNT = "Instance count must be positive.";
 
   @VisibleForTesting
-  static final String INVALID_STEPS_SUMMATION = "Sum of all steps must be positive.";
+  static final String UNKNOWN_UPDATE_STRATEGY = "Update strategy provided is unknown.";
 }
