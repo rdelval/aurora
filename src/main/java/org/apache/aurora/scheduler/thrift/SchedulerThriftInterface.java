@@ -38,6 +38,7 @@ import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 
 import org.apache.aurora.common.stats.StatsProvider;
+import org.apache.aurora.gen.BatchJobUpdateStrategy;
 import org.apache.aurora.gen.DrainHostsResult;
 import org.apache.aurora.gen.EndMaintenanceResult;
 import org.apache.aurora.gen.ExplicitReconciliationSettings;
@@ -53,12 +54,13 @@ import org.apache.aurora.gen.JobUpdatePulseStatus;
 import org.apache.aurora.gen.JobUpdateQuery;
 import org.apache.aurora.gen.JobUpdateRequest;
 import org.apache.aurora.gen.JobUpdateSettings;
-import org.apache.aurora.gen.JobUpdateStrategyType;
+import org.apache.aurora.gen.JobUpdateStrategy;
 import org.apache.aurora.gen.JobUpdateSummary;
 import org.apache.aurora.gen.ListBackupsResult;
 import org.apache.aurora.gen.MaintenanceStatusResult;
 import org.apache.aurora.gen.PulseJobUpdateResult;
 import org.apache.aurora.gen.QueryRecoveryResult;
+import org.apache.aurora.gen.QueueJobUpdateStrategy;
 import org.apache.aurora.gen.ReadOnlyScheduler;
 import org.apache.aurora.gen.ResourceAggregate;
 import org.apache.aurora.gen.Response;
@@ -68,6 +70,7 @@ import org.apache.aurora.gen.SlaPolicy;
 import org.apache.aurora.gen.StartJobUpdateResult;
 import org.apache.aurora.gen.StartMaintenanceResult;
 import org.apache.aurora.gen.TaskQuery;
+import org.apache.aurora.gen.VariableBatchJobUpdateStrategy;
 import org.apache.aurora.scheduler.base.JobKeys;
 import org.apache.aurora.scheduler.base.Numbers;
 import org.apache.aurora.scheduler.base.Query;
@@ -795,54 +798,45 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
 
     JobUpdateSettings settings = requireNonNull(mutableRequest.getSettings());
 
-    // Determine update strategy based upon waitForBatchCompletion if strategy type is not set
-    if(!settings.isSetUpdateStrategyType()) {
+    // Convert old format to new format of update strategy.
+    if(!settings.isSetUpdateStrategy()) {
       if(settings.isWaitForBatchCompletion()) {
-        settings.setUpdateStrategyType(JobUpdateStrategyType.BATCH);
+        settings.setUpdateStrategy(
+            JobUpdateStrategy.batchStrategy(
+                new BatchJobUpdateStrategy().setGroupSize(settings.getUpdateGroupSize())));
       } else {
-        settings.setUpdateStrategyType(JobUpdateStrategyType.QUEUE);
+        settings.setUpdateStrategy(
+            JobUpdateStrategy.queueStrategy(
+                new QueueJobUpdateStrategy().setGroupSize(settings.getUpdateGroupSize())));
       }
     }
 
-    // Convert old format to new format of update strategy
-    switch(settings.getUpdateStrategyType()) {
+    int totalInstancesFromGroups;
+    if(settings.getUpdateStrategy().isSetQueueStrategy()) {
 
-      case VARIABLE_BATCH:
-        // Noop, just confirming this strategy is valid.
-        break;
+      totalInstancesFromGroups = settings.getUpdateStrategy().getQueueStrategy().getGroupSize();
+    } else if(settings.getUpdateStrategy().isSetBatchStrategy()) {
 
-      case BATCH:
-      case QUEUE:
-        if(settings.isSetGroupSizes()) {
-          if(settings.getGroupSizes().size() > 1) {
-            return invalidRequest(TOO_MANY_STEPS);
-          }
-        } else {
-          settings.setGroupSizes(ImmutableList.of(settings.getUpdateGroupSize()));
-        }
-        break;
+      totalInstancesFromGroups = settings.getUpdateStrategy().getBatchStrategy().getGroupSize();
+    } else if(settings.getUpdateStrategy().isSetVarBatchStrategy()) {
 
-      default:
-        return invalidRequest(UNKNOWN_UPDATE_STRATEGY);
+      VariableBatchJobUpdateStrategy strategy = settings.getUpdateStrategy().getVarBatchStrategy();
+
+      if (strategy.getGroupSizes().stream().anyMatch(x -> x <= 0)) {
+        return invalidRequest(INVALID_GROUP_SIZE);
+      }
+
+      if(strategy.getGroupSizes().size() == 0) {
+        return invalidRequest(TOO_FEW_STEPS);
+      }
+
+      totalInstancesFromGroups = strategy.getGroupSizes().stream().reduce(0, Integer::sum);
+    } else {
+      return invalidRequest(UNKNOWN_UPDATE_STRATEGY);
     }
 
-    if(settings.getGroupSizes().size() == 0) {
-      return invalidRequest(TOO_FEW_STEPS);
-    }
-
-    if (settings.getGroupSizes().stream().anyMatch(x -> x <= 0)) {
-      return invalidRequest(INVALID_GROUP_SIZE);
-    }
-
-    int totalInstances = settings.getGroupSizes().stream().reduce(0, Integer::sum);
-
-    if (totalInstances <= 0) {
-      return invalidRequest(INVALID_INSTANCE_COUNT);
-    }
-
-    if (settings.getMaxPerInstanceFailures() * totalInstances
-        > thresholds.getMaxUpdateInstanceFailures()) {
-      return invalidRequest(TOO_MANY_POTENTIAL_FAILED_INSTANCES);
+    if (totalInstancesFromGroups <= 0) {
+      return invalidRequest(INVALID_GROUPS_SUM);
     }
 
     if (settings.getMaxPerInstanceFailures() < 0) {
@@ -851,6 +845,11 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
 
     if (settings.getMaxFailedInstances() < 0) {
       return invalidRequest(INVALID_MAX_FAILED_INSTANCES);
+    }
+
+    if (settings.getMaxPerInstanceFailures() * mutableRequest.getInstanceCount()
+            > thresholds.getMaxUpdateInstanceFailures()) {
+      return invalidRequest(TOO_MANY_POTENTIAL_FAILED_INSTANCES);
     }
 
     if (settings.getMinWaitInInstanceRunningMs() < 0) {
@@ -1092,7 +1091,7 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
   static final String INVALID_GROUP_SIZE = "All update group sizes must be positive.";
 
   @VisibleForTesting
-  static final String TOO_MANY_STEPS = "This strategy only supports a single group size step.";
+  static final String INVALID_GROUPS_SUM = "Sum of all group sizes must be positive.";
 
   @VisibleForTesting
   static final String TOO_FEW_STEPS = "One or more steps must be included as "

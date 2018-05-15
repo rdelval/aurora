@@ -40,15 +40,20 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
 
   private final int totalInstanceCount;
 
+  private Integer instanceModCount = null;
+
   private static final Logger LOG = LoggerFactory.getLogger(VariableBatchStrategy.class);
 
   /**
-   * Creates an variable active-limited strategy that applies an upper bound to all results.
+   * Creates a variable active-limited strategy that applies an upper bound to all results.
    *
-   * @param maxActiveGroups  List of Maximum number of values to return from. Each represents a step.
+   * @param maxActiveGroups  List of Maximum group sizes. Each group size represents a step.
    * {@link #getNextGroup(Set, Set)}.
    */
-  public VariableBatchStrategy(Ordering<T> ordering, List<Integer> maxActiveGroups, boolean rollingForward) {
+  public VariableBatchStrategy(Ordering<T> ordering,
+      List<Integer> maxActiveGroups,
+      boolean rollingForward) {
+
     this.ordering = Objects.requireNonNull(ordering);
     this.rollingForward = rollingForward;
 
@@ -64,38 +69,54 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
 
   private final int determineStep(int idle){
 
-    // Calculate which step where in by finding out how many instances we have left to update
-    int scheduled = totalInstanceCount - idle;
+    // Calculate which step we are in by finding out how many instances we have left to update.
+    int scheduled = instanceModCount - idle;
 
     int step = 0;
     int sum = 0;
 
-    if (rollingForward) {
-      LOG.info("Currently there are %d scheduled, %d idle, and %d total.\n", scheduled, idle, totalInstanceCount);
+    LOG.info("Update progress {} changed, {} idle, and {} total to be changed.",
+        scheduled,
+        idle,
+        instanceModCount);
 
-      while (sum < scheduled) {
+    if (rollingForward) {
+      while (sum < scheduled && step < maxActiveGroups.size()) {
         sum += maxActiveGroups.get(step);
+
         ++step;
       }
     } else {
-      LOG.info("Currently there are %d scheduled, %d idle, and %d total.\n", scheduled, idle, totalInstanceCount);
 
       // Starting with the first step as we're now comparing to idle instead of scheduled
       // to work backwards from the last step that was executed in the batch steps.
       sum = maxActiveGroups.get(step);
 
-      // TODO(rdelvalle): Consider if it's necessary to handle fractional steps. (i.e. halfway between step 0 and 1)
+      // TODO(rdelvalle): Consider if it's necessary to handle fractional steps.
+      // (i.e. halfway between step X and X+1)
       while (sum < idle) {
         ++step;
+
+        if(step == maxActiveGroups.size()) {
+          break;
+        }
+
         sum += maxActiveGroups.get(step);
       }
     }
 
+    // Cap at last step in case final instance count is greater than the sum of all steps.
     return Math.min(step, maxActiveGroups.size()-1);
   }
 
   @Override
   public final Set<T> getNextGroup(Set<T> idle, Set<T> active) {
+
+    // Get the size for the idle set on the first run only. This is representative of the number
+    // of overall instance modifications this update will trigger.
+    if(instanceModCount == null) {
+      instanceModCount = idle.size();
+    }
 
     return ordering.sortedCopy(doGetNextGroup(idle, active)).stream()
             .limit(Math.max(0, maxActiveGroups.get(determineStep(idle.size())) - active.size()))

@@ -116,23 +116,23 @@ interface UpdateFactory {
           ? updateOrdering
           : updateOrdering.reverse();
 
-      UpdateStrategy<Integer> updateStrategy;
+      UpdateStrategy<Integer> strategy;
 
-      switch(settings.getUpdateStrategyType()) {
-          case VARIABLE_BATCH:
-            updateStrategy =
-                new VariableBatchStrategy<>(updateOrder, settings.getGroupSizes(), rollingForward);
-            break;
-
-          case BATCH:
-            updateStrategy = new BatchStrategy<>(updateOrder, settings.getGroupSizes().get(0));
-            break;
-
-          case QUEUE:
-          default:
-            // Verification that the update strategy has already taken place when we receive
-            // the thrift call.
-            updateStrategy = new QueueStrategy<>(updateOrder, settings.getGroupSizes().get(0));
+      // Note: Verification that the update strategy exists and is valid has already taken
+      // place when the scheduler receives the thrift call.
+      if(settings.getUpdateStrategy().isSetBatchStrategy()) {
+        strategy = new BatchStrategy<>(
+            updateOrder,
+            settings.getUpdateStrategy().getBatchStrategy().getGroupSize());
+      } else if(settings.getUpdateStrategy().isSetVarBatchStrategy()) {
+        strategy = new VariableBatchStrategy<>(
+            updateOrder,
+            settings.getUpdateStrategy().getVarBatchStrategy().getGroupSizes(),
+            rollingForward);
+      } else {
+        strategy = new QueueStrategy<>(
+            updateOrder,
+            settings.getUpdateStrategy().getQueueStrategy().getGroupSize());
       }
 
       JobUpdateStatus successStatus =
@@ -143,7 +143,7 @@ interface UpdateFactory {
 
       return new Update(
           new OneWayJobUpdater<>(
-              updateStrategy,
+              strategy,
               settings.getMaxFailedInstances(),
               evaluators.build()),
           successStatus,
