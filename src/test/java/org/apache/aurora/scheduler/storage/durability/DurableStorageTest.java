@@ -44,6 +44,7 @@ import org.apache.aurora.gen.JobUpdateStrategy;
 import org.apache.aurora.gen.JobUpdateSummary;
 import org.apache.aurora.gen.MaintenanceMode;
 import org.apache.aurora.gen.PercentageSlaPolicy;
+import org.apache.aurora.gen.QueueJobUpdateStrategy;
 import org.apache.aurora.gen.Range;
 import org.apache.aurora.gen.ResourceAggregate;
 import org.apache.aurora.gen.ScheduleStatus;
