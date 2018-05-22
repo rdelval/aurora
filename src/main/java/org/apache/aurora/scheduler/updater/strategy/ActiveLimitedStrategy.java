@@ -15,11 +15,10 @@ package org.apache.aurora.scheduler.updater.strategy;
 
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Ordering;
-import java.util.stream.Collectors;
 
 /**
  * A strategy that limits the number of instances selected by the subclass.

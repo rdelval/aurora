@@ -43,6 +43,7 @@ import org.apache.aurora.common.stats.StatsProvider;
 import org.apache.aurora.common.testing.easymock.EasyMockTest;
 import org.apache.aurora.common.util.Clock;
 import org.apache.aurora.common.util.TruncatedBinaryBackoff;
+import org.apache.aurora.gen.BatchJobUpdateStrategy;
 import org.apache.aurora.gen.InstanceTaskConfig;
 import org.apache.aurora.gen.JobUpdate;
 import org.apache.aurora.gen.JobUpdateAction;
@@ -53,8 +54,10 @@ import org.apache.aurora.gen.JobUpdatePulseStatus;
 import org.apache.aurora.gen.JobUpdateSettings;
 import org.apache.aurora.gen.JobUpdateState;
 import org.apache.aurora.gen.JobUpdateStatus;
+import org.apache.aurora.gen.JobUpdateStrategy;
 import org.apache.aurora.gen.JobUpdateSummary;
 import org.apache.aurora.gen.Metadata;
+import org.apache.aurora.gen.QueueJobUpdateStrategy;
 import org.apache.aurora.gen.Range;
 import org.apache.aurora.gen.ScheduleStatus;
 import org.apache.aurora.gen.ScheduledTask;
@@ -768,8 +771,8 @@ public class JobUpdaterIT extends EasyMockTest {
 
     JobUpdate builder = makeJobUpdate(makeInstanceConfig(0, 2, OLD_CONFIG)).newBuilder();
     builder.getInstructions().getSettings()
-        .setWaitForBatchCompletion(true)
-        .setUpdateGroupSize(2);
+        .setUpdateStrategy(
+            JobUpdateStrategy.batchStrategy(new BatchJobUpdateStrategy().setGroupSize(2)));
     IJobUpdate update = IJobUpdate.build(builder);
     insertInitialTasks(update);
 
@@ -1067,7 +1070,10 @@ public class JobUpdaterIT extends EasyMockTest {
     control.replay();
 
     JobUpdate update = makeJobUpdate().newBuilder();
-    update.getInstructions().getSettings().setUpdateGroupSize(-1);
+    update.getInstructions()
+        .getSettings()
+        .setUpdateStrategy(
+            JobUpdateStrategy.queueStrategy(new QueueJobUpdateStrategy().setGroupSize(-1)));
     expectInvalid(update);
 
     update = makeJobUpdate().newBuilder();
@@ -1083,7 +1089,8 @@ public class JobUpdaterIT extends EasyMockTest {
 
     control.replay();
 
-    IJobUpdate update = setInstanceCount(makeJobUpdate(makeInstanceConfig(0, 1, OLD_CONFIG)), 2);
+    IJobUpdate update = setInstanceCount(
+        makeJobUpdate(makeInstanceConfig(0, 1, OLD_CONFIG)), 2);
     insertInitialTasks(update);
 
     changeState(JOB, 0, ASSIGNED, STARTING, RUNNING);
@@ -1102,7 +1109,11 @@ public class JobUpdaterIT extends EasyMockTest {
       store.deleteAllUpdates();
 
       JobUpdate builder = update.newBuilder();
-      builder.getInstructions().getSettings().setUpdateGroupSize(0);
+      builder.getInstructions()
+          .getSettings()
+          .getUpdateStrategy()
+          .getQueueStrategy()
+          .setGroupSize(0);
       saveJobUpdate(store, IJobUpdate.build(builder), ROLLING_FORWARD);
     });
 
@@ -1313,8 +1324,8 @@ public class JobUpdaterIT extends EasyMockTest {
 
     JobUpdate builder = makeJobUpdate(makeInstanceConfig(0, 2, OLD_CONFIG)).newBuilder();
     builder.getInstructions().getSettings()
-        .setWaitForBatchCompletion(true)
-        .setUpdateGroupSize(2);
+        .setUpdateStrategy(
+            JobUpdateStrategy.batchStrategy(new BatchJobUpdateStrategy().setGroupSize(2)));
     IJobUpdate update = IJobUpdate.build(builder);
     insertInitialTasks(update);
 
@@ -1367,8 +1378,8 @@ public class JobUpdaterIT extends EasyMockTest {
 
     JobUpdate builder = makeJobUpdate(makeInstanceConfig(0, 2, OLD_CONFIG)).newBuilder();
     builder.getInstructions().getSettings()
-        .setWaitForBatchCompletion(true)
-        .setUpdateGroupSize(2);
+        .setUpdateStrategy(
+            JobUpdateStrategy.batchStrategy(new BatchJobUpdateStrategy().setGroupSize(2)));
     IJobUpdate update = IJobUpdate.build(builder);
     insertInitialTasks(update);
 
@@ -1537,7 +1548,8 @@ public class JobUpdaterIT extends EasyMockTest {
                 .setTask(NEW_CONFIG.newBuilder())
                 .setInstances(ImmutableSet.of(new Range(0, 2))))
             .setSettings(new JobUpdateSettings()
-                .setUpdateGroupSize(1)
+                .setUpdateStrategy(
+                    JobUpdateStrategy.queueStrategy(new QueueJobUpdateStrategy().setGroupSize(1)))
                 .setRollbackOnFailure(true)
                 .setMinWaitInInstanceRunningMs(WATCH_TIMEOUT.as(Time.MILLISECONDS).intValue())
                 .setUpdateOnlyTheseInstances(ImmutableSet.of())));

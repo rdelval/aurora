@@ -38,7 +38,6 @@ import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 
 import org.apache.aurora.common.stats.StatsProvider;
-import org.apache.aurora.gen.BatchJobUpdateStrategy;
 import org.apache.aurora.gen.DrainHostsResult;
 import org.apache.aurora.gen.EndMaintenanceResult;
 import org.apache.aurora.gen.ExplicitReconciliationSettings;
@@ -54,13 +53,11 @@ import org.apache.aurora.gen.JobUpdatePulseStatus;
 import org.apache.aurora.gen.JobUpdateQuery;
 import org.apache.aurora.gen.JobUpdateRequest;
 import org.apache.aurora.gen.JobUpdateSettings;
-import org.apache.aurora.gen.JobUpdateStrategy;
 import org.apache.aurora.gen.JobUpdateSummary;
 import org.apache.aurora.gen.ListBackupsResult;
 import org.apache.aurora.gen.MaintenanceStatusResult;
 import org.apache.aurora.gen.PulseJobUpdateResult;
 import org.apache.aurora.gen.QueryRecoveryResult;
-import org.apache.aurora.gen.QueueJobUpdateStrategy;
 import org.apache.aurora.gen.ReadOnlyScheduler;
 import org.apache.aurora.gen.ResourceAggregate;
 import org.apache.aurora.gen.Response;
@@ -798,35 +795,19 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
 
     JobUpdateSettings settings = requireNonNull(mutableRequest.getSettings());
 
-    // Convert old format to new format of update strategy.
-    if(!settings.isSetUpdateStrategy()) {
-      if(settings.isWaitForBatchCompletion()) {
-        settings.setUpdateStrategy(
-            JobUpdateStrategy.batchStrategy(
-                new BatchJobUpdateStrategy().setGroupSize(settings.getUpdateGroupSize())));
-      } else {
-        settings.setUpdateStrategy(
-            JobUpdateStrategy.queueStrategy(
-                new QueueJobUpdateStrategy().setGroupSize(settings.getUpdateGroupSize())));
-      }
-    }
-
     int totalInstancesFromGroups;
-    if(settings.getUpdateStrategy().isSetQueueStrategy()) {
-
+    if (settings.getUpdateStrategy().isSetQueueStrategy()) {
       totalInstancesFromGroups = settings.getUpdateStrategy().getQueueStrategy().getGroupSize();
-    } else if(settings.getUpdateStrategy().isSetBatchStrategy()) {
-
+    } else if (settings.getUpdateStrategy().isSetBatchStrategy()) {
       totalInstancesFromGroups = settings.getUpdateStrategy().getBatchStrategy().getGroupSize();
-    } else if(settings.getUpdateStrategy().isSetVarBatchStrategy()) {
-
+    } else if (settings.getUpdateStrategy().isSetVarBatchStrategy()) {
       VariableBatchJobUpdateStrategy strategy = settings.getUpdateStrategy().getVarBatchStrategy();
 
       if (strategy.getGroupSizes().stream().anyMatch(x -> x <= 0)) {
         return invalidRequest(INVALID_GROUP_SIZE);
       }
 
-      if(strategy.getGroupSizes().size() == 0) {
+      if (strategy.getGroupSizes().size() == 0) {
         return invalidRequest(TOO_FEW_STEPS);
       }
 

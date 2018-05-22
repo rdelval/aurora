@@ -44,6 +44,7 @@ import org.apache.aurora.gen.JobUpdatePulseStatus;
 import org.apache.aurora.gen.JobUpdateQuery;
 import org.apache.aurora.gen.JobUpdateRequest;
 import org.apache.aurora.gen.JobUpdateSettings;
+import org.apache.aurora.gen.JobUpdateStrategy;
 import org.apache.aurora.gen.JobUpdateSummary;
 import org.apache.aurora.gen.LimitConstraint;
 import org.apache.aurora.gen.ListBackupsResult;
@@ -53,6 +54,7 @@ import org.apache.aurora.gen.Metadata;
 import org.apache.aurora.gen.PercentageSlaPolicy;
 import org.apache.aurora.gen.PulseJobUpdateResult;
 import org.apache.aurora.gen.QueryRecoveryResult;
+import org.apache.aurora.gen.QueueJobUpdateStrategy;
 import org.apache.aurora.gen.Range;
 import org.apache.aurora.gen.ReadOnlyScheduler;
 import org.apache.aurora.gen.Resource;
@@ -1461,10 +1463,11 @@ public class SchedulerThriftInterfaceTest extends EasyMockTest {
     control.replay();
 
     JobUpdateRequest updateRequest = buildServiceJobUpdateRequest();
-    updateRequest.getSettings().setUpdateGroupSize(0);
+    updateRequest.getSettings().setUpdateStrategy(
+        JobUpdateStrategy.queueStrategy(new QueueJobUpdateStrategy().setGroupSize(0)));
 
     assertEquals(
-        invalidResponse(SchedulerThriftInterface.INVALID_GROUP_SIZE),
+        invalidResponse(SchedulerThriftInterface.INVALID_GROUPS_SUM),
         thrift.startJobUpdate(updateRequest, AUDIT_MESSAGE));
     assertEquals(0L, statsProvider.getLongValue(START_JOB_UPDATE));
   }
@@ -1926,7 +1929,8 @@ public class SchedulerThriftInterfaceTest extends EasyMockTest {
 
   private static JobUpdateSettings buildJobUpdateSettings() {
     return new JobUpdateSettings()
-        .setUpdateGroupSize(10)
+        .setUpdateStrategy(
+            JobUpdateStrategy.queueStrategy(new QueueJobUpdateStrategy().setGroupSize(10)))
         .setMaxFailedInstances(2)
         .setMaxPerInstanceFailures(1)
         .setMinWaitInInstanceRunningMs(15000)

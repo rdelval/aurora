@@ -13,16 +13,16 @@
  */
 package org.apache.aurora.scheduler.updater.strategy;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,12 +35,8 @@ import org.slf4j.LoggerFactory;
 public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStrategy<T> {
   private final Ordering<T> ordering;
   protected final ImmutableList<Integer> maxActiveGroups;
-
   private final boolean rollingForward;
-
-  private final int totalInstanceCount;
-
-  private Integer instanceModCount = null;
+  private Optional<Integer> instanceModCount;
 
   private static final Logger LOG = LoggerFactory.getLogger(VariableBatchStrategy.class);
 
@@ -59,18 +55,13 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
 
     maxActiveGroups.forEach(x -> Preconditions.checkArgument(x > 0));
 
-    int acc = 0;
-    for (int step : maxActiveGroups) {
-      acc += step;
-    }
-    this.totalInstanceCount = acc;
     this.maxActiveGroups = ImmutableList.copyOf(maxActiveGroups);
   }
 
-  private final int determineStep(int idle){
+  private int determineStep(int idle) {
 
     // Calculate which step we are in by finding out how many instances we have left to update.
-    int scheduled = instanceModCount - idle;
+    int scheduled = instanceModCount.get() - idle;
 
     int step = 0;
     int sum = 0;
@@ -78,7 +69,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     LOG.info("Update progress {} changed, {} idle, and {} total to be changed.",
         scheduled,
         idle,
-        instanceModCount);
+        instanceModCount.get());
 
     if (rollingForward) {
       while (sum < scheduled && step < maxActiveGroups.size()) {
@@ -97,7 +88,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
       while (sum < idle) {
         ++step;
 
-        if(step == maxActiveGroups.size()) {
+        if (step == maxActiveGroups.size()) {
           break;
         }
 
@@ -106,7 +97,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     }
 
     // Cap at last step in case final instance count is greater than the sum of all steps.
-    return Math.min(step, maxActiveGroups.size()-1);
+    return Math.min(step, maxActiveGroups.size() - 1);
   }
 
   @Override
@@ -114,8 +105,8 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
 
     // Get the size for the idle set on the first run only. This is representative of the number
     // of overall instance modifications this update will trigger.
-    if(instanceModCount == null) {
-      instanceModCount = idle.size();
+    if (!instanceModCount.isPresent()) {
+      instanceModCount = Optional.of(idle.size());
     }
 
     return ordering.sortedCopy(doGetNextGroup(idle, active)).stream()
@@ -124,7 +115,9 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   }
 
   /**
-   * Return a list of instances to be updated. If the result is larger than {@link #maxActiveGroups},
+   * Return a list of instances to be updated.
+   * Returns an empty list if the current active group has not completed.
+   * If the result is larger than the current group size in {@link #maxActiveGroups},
    * it will be truncated.
    *
    * @param idle Idle instances, candidate for being updated.
