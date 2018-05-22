@@ -749,6 +749,12 @@ struct JobUpdateSettings {
   * unblocked by a fresh pulseJobUpdate call.
   */
   9: optional i32 blockIfNoPulsesAfterMs
+
+  /**
+   * This list contains the number of instances that each batch will complete before moving on to
+   * the next. This field creates an update that behaves like waitForBatchCompletion.
+  **/
+  10: optional list<i32> variableUpdateGroupSize
 }
 
 /** Event marking a state transition in job update lifecycle. */
@@ -800,6 +806,9 @@ struct JobUpdateState {
 
   /** Last modified timestamp in milliseconds. */
   3: i64 lastModifiedTimestampMs
+
+  /** Current step a Variable Update Group is currently in */
+  4: optional i32 variableUpdateGroupStep
 }
 
 /** Summary of the job update including job key, user and current state. */

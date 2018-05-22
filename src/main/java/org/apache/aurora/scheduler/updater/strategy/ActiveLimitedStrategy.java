@@ -19,6 +19,7 @@ import java.util.Set;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Ordering;
+import java.util.stream.Collectors;
 
 /**
  * A strategy that limits the number of instances selected by the subclass.
@@ -43,10 +44,9 @@ abstract class ActiveLimitedStrategy<T extends Comparable<T>> implements UpdateS
 
   @Override
   public final Set<T> getNextGroup(Set<T> idle, Set<T> active) {
-    return FluentIterable
-        .from(ordering.sortedCopy(doGetNextGroup(idle, active)))
+    return ordering.sortedCopy(doGetNextGroup(idle, active)).stream()
         .limit(Math.max(0, maxActive - active.size()))
-        .toSet();
+        .collect(Collectors.toSet());
   }
 
   /**

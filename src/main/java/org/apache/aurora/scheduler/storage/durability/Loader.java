@@ -144,6 +144,9 @@ public final class Loader {
         stores.getJobUpdateStore().removeJobUpdates(
             IJobUpdateKey.setFromBuilders(op.getRemoveJobUpdate().getKeys()));
         break;
+      case SAVE_JOB_UPDATE_BATCH_STEP:
+
+        break;
 
       case SAVE_HOST_MAINTENANCE_REQUEST:
         stores.getHostMaintenanceStore().saveHostMaintenanceRequest(

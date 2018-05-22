@@ -29,7 +29,9 @@ import org.apache.aurora.common.quantity.Amount;
 import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.util.Clock;
 import org.apache.aurora.gen.JobUpdateStatus;
+import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.entities.IInstanceTaskConfig;
+import org.apache.aurora.scheduler.storage.entities.IJobUpdate;
 import org.apache.aurora.scheduler.storage.entities.IJobUpdateInstructions;
 import org.apache.aurora.scheduler.storage.entities.IJobUpdateSettings;
 import org.apache.aurora.scheduler.storage.entities.IRange;
@@ -38,6 +40,7 @@ import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
 import org.apache.aurora.scheduler.updater.strategy.BatchStrategy;
 import org.apache.aurora.scheduler.updater.strategy.QueueStrategy;
 import org.apache.aurora.scheduler.updater.strategy.UpdateStrategy;
+import org.apache.aurora.scheduler.updater.strategy.VariableBatchStrategy;
 
 import static java.util.Objects.requireNonNull;
 
@@ -56,14 +59,15 @@ interface UpdateFactory {
    * Creates a one-way job updater that will execute the job update configuration in the direction
    * specified by {@code rollingForward}.
    *
-   * @param configuration Configuration to act on.
+   * @param jobUpdate Update to act on.
    * @param rollingForward {@code true} if this is a job update, {@code false} if it is a rollback.
    * @return An updater that will execute the job update as specified in the
    *         {@code configuration}.
    */
   Update newUpdate(
-      IJobUpdateInstructions configuration,
-      boolean rollingForward);
+      IJobUpdate jobUpdate,
+      boolean rollingForward,
+      Storage storage);
 
   class UpdateFactoryImpl implements UpdateFactory {
     private final Clock clock;
@@ -74,7 +78,8 @@ interface UpdateFactory {
     }
 
     @Override
-    public Update newUpdate(IJobUpdateInstructions instructions, boolean rollingForward) {
+    public Update newUpdate(IJobUpdate jobUpdate, boolean rollingForward, Storage storage) {
+      IJobUpdateInstructions instructions = jobUpdate.getInstructions();
       requireNonNull(instructions);
       IJobUpdateSettings settings = instructions.getSettings();
       checkArgument(
@@ -117,9 +122,16 @@ interface UpdateFactory {
           ? updateOrdering
           : updateOrdering.reverse();
 
-      UpdateStrategy<Integer> strategy = settings.isWaitForBatchCompletion()
-          ? new BatchStrategy<>(updateOrder, settings.getUpdateGroupSize())
-          : new QueueStrategy<>(updateOrder, settings.getUpdateGroupSize());
+      // Order of preference is Variable Batch, Batch, then Queue
+      UpdateStrategy<Integer> strategy;
+      if (settings.getVariableUpdateGroupSize().size() > 0) {
+        strategy = new VariableBatchStrategy<>(updateOrder, settings.getVariableUpdateGroupSize(), storage, jobUpdate.getSummary().getKey());
+      } else if (settings.isWaitForBatchCompletion()) {
+        strategy = new BatchStrategy<>(updateOrder, settings.getUpdateGroupSize());
+      } else {
+        strategy = new QueueStrategy<>(updateOrder, settings.getUpdateGroupSize());
+      }
+
       JobUpdateStatus successStatus =
           rollingForward ? JobUpdateStatus.ROLLED_FORWARD : JobUpdateStatus.ROLLED_BACK;
       JobUpdateStatus failureStatus = rollingForward && settings.isRollbackOnFailure()

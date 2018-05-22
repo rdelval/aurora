@@ -34,6 +34,7 @@ import org.apache.aurora.gen.storage.SaveHostAttributes;
 import org.apache.aurora.gen.storage.SaveHostMaintenanceRequest;
 import org.apache.aurora.gen.storage.SaveJobInstanceUpdateEvent;
 import org.apache.aurora.gen.storage.SaveJobUpdate;
+import org.apache.aurora.gen.storage.SaveJobUpdateBatchStep;
 import org.apache.aurora.gen.storage.SaveJobUpdateEvent;
 import org.apache.aurora.gen.storage.SaveQuota;
 import org.apache.aurora.gen.storage.SaveTasks;
@@ -229,6 +230,14 @@ public class WriteRecorder implements
 
     write(Op.saveJobUpdateEvent(new SaveJobUpdateEvent(event.newBuilder(), key.newBuilder())));
     jobUpdateStore.saveJobUpdateEvent(key, event);
+  }
+
+  @Override
+  public void saveJobUpdateBatchStep(IJobUpdateKey key, int step) {
+    requireNonNull(key);
+
+    write(Op.saveJobUpdateBatchStep(new SaveJobUpdateBatchStep(key.newBuilder(), step)));
+    jobUpdateStore.saveJobUpdateBatchStep(key, step);
   }
 
   @Override

@@ -793,7 +793,17 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
     }
 
     JobUpdateSettings settings = requireNonNull(mutableRequest.getSettings());
-    if (settings.getUpdateGroupSize() <= 0) {
+
+    if (settings.isSetVariableUpdateGroupSize()) {
+      if (settings.getVariableUpdateGroupSize().stream().anyMatch(x -> x <= 0)) {
+        return invalidRequest(INVALID_GROUP_STEP_SIZE);
+      }
+
+      if (settings.getVariableUpdateGroupSize().stream().reduce(0, Integer::sum) <= 0) {
+          return invalidRequest(INVALID_STEPS_SUMMATION);
+      }
+
+    } else if (settings.getUpdateGroupSize() <= 0) {
       return invalidRequest(INVALID_GROUP_SIZE);
     }
 
@@ -1049,6 +1059,10 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
   static final String INVALID_GROUP_SIZE = "updateGroupSize must be positive.";
 
   @VisibleForTesting
+  static final String INVALID_GROUP_STEP_SIZE =
+      "All steps in variableUpdateGroupSize must be positive.";
+
+  @VisibleForTesting
   static final String INVALID_MAX_FAILED_INSTANCES = "maxFailedInstances must be non-negative.";
 
   @VisibleForTesting
@@ -1071,4 +1085,7 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
 
   @VisibleForTesting
   static final String INVALID_INSTANCE_COUNT = "Instance count must be positive.";
+
+  @VisibleForTesting
+  static final String INVALID_STEPS_SUMMATION = "Sum of all steps must be positive.";
 }
