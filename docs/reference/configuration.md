@@ -376,6 +376,32 @@ Parameters for controlling the rate and policy of rolling updates.
 | ```rollback_on_failure```    | boolean  | When False, prevents auto rollback of a failed update (Default: True)
 | ```wait_for_batch_completion```| boolean | When True, all threads from a given batch will be blocked from picking up new instances until the entire batch is updated. This essentially simulates the legacy sequential updater algorithm. (Default: False)
 | ```pulse_interval_secs```    | Integer  |  Indicates a [coordinated update](../features/job-updates.md#coordinated-job-updates). If no pulses are received within the provided interval the update will be blocked. Beta-updater only. Will fail on submission when used with client updater. (Default: None)
+| ```update_strategy```        | Choice of ```QueueUpdateStrategy```,  ```BatchUpdateStrategy```, or ```VariableBatchUpdateStrategy``` object | Indicate which update strategy to use for this update.
+
+### QueueUpdateStrategy Objects
+
+Update strategy which will keep the active updating instances at size ```batch_size``` throughout the update until there are no more instances left to update.
+
+| object                       | type     | description
+| ---------------------------- | :------: | ------------
+| ```batch_size```             | Integer  | Maximum number of shards to be updated in one iteration (Default: 1)
+
+### BatchUpdateStrategy Objects
+
+Update strategy which will wait until a maximum of ``batch_size`` number of instances are updated before continuing on to the next group until all instances are updated.
+
+| object                       | type     | description
+| ---------------------------- | :------: | ------------
+| ```batch_size```             | Integer  | Maximum number of shards to be updated in one iteration (Default: 1)
+
+### VariableBatchUpdateStrategy Objects
+
+Similar to Batch Update strategy, this strategy will wait until all instances in a current group are updated before updating more instances.
+However, with this strategy the size of each group may change as the update progresses.
+
+| object                       | type     | description
+| ---------------------------- | :------: | ------------
+| ```batch_sizes```             | List(Integer)  | Maximum number of shards to be updated per iteration. As each iteration completes, the next iteration's group size may change. If there are still instances that need to be updated after all sizes are used, the last size will be reused for the remainder of the update.
 
 ### HealthCheckConfig Objects
 
