@@ -707,7 +707,6 @@ enum JobUpdatePulseStatus {
   FINISHED = 2
 }
 
-
 /** Job update key. */
 struct JobUpdateKey {
   /** Job being updated */
