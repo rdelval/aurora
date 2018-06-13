@@ -36,7 +36,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   private final Ordering<T> ordering;
   protected final ImmutableList<Integer> maxActiveGroups;
   private final boolean rollingForward;
-  private Optional<Integer> instanceModCount;
+  private Optional<Integer> instanceModificationCount;
 
   private static final Logger LOG = LoggerFactory.getLogger(VariableBatchStrategy.class);
 
@@ -56,12 +56,13 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     maxActiveGroups.forEach(x -> Preconditions.checkArgument(x > 0));
 
     this.maxActiveGroups = ImmutableList.copyOf(maxActiveGroups);
+    this.instanceModificationCount = Optional.empty();
   }
 
   private int determineStep(int idle) {
 
     // Calculate which step we are in by finding out how many instances we have left to update.
-    int scheduled = instanceModCount.get() - idle;
+    int scheduled = instanceModificationCount.get() - idle;
 
     int step = 0;
     int sum = 0;
@@ -69,7 +70,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     LOG.info("Update progress {} changed, {} idle, and {} total to be changed.",
         scheduled,
         idle,
-        instanceModCount.get());
+        instanceModificationCount.get());
 
     if (rollingForward) {
       while (sum < scheduled && step < maxActiveGroups.size()) {
@@ -105,8 +106,8 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
 
     // Get the size for the idle set on the first run only. This is representative of the number
     // of overall instance modifications this update will trigger.
-    if (!instanceModCount.isPresent()) {
-      instanceModCount = Optional.of(idle.size());
+    if (!instanceModificationCount.isPresent()) {
+      instanceModificationCount = Optional.of(idle.size());
     }
 
     return ordering.sortedCopy(doGetNextGroup(idle, active)).stream()
