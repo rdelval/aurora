@@ -24,7 +24,7 @@ Follow these steps to prepare the cluster for restoring from a backup:
 
 * Stop all scheduler instances.
 
-* Pick a backup to use for rehydrating the  mesos-replicated log. Backups can be found in the 
+* Pick a backup to use for rehydrating the mesos-replicated log. Backups can be found in the 
 directory given to the scheduler as the `-backup_dir` argument. Backups are stored in the format
 `scheduler-backup-<yyyy-MM-dd-HH-mm>`.
 
@@ -36,15 +36,23 @@ in `/usr/share/aurora/bin/recovery-tool`.
 
 ## Cleanup
 
-* Delete (or move) the Mesos replicated log for each scheduler instance. The location of the 
-Mesos replicated log file path can be found by looking at the `-native_log_file_path` value 
-given to each instance.
+* Delete (or move) the Mesos replicated log path for each scheduler instance. The location of the 
+Mesos replicated log file path can be found by looking at the value given to the flag 
+`-native_log_file_path` for each instance.
 
-* Initialize Mesos replica's log file: `sudo mesos-log initialize --path=<native_log_file_path>`
+* Initialize the Mesos replicated log files using the mesos-log tool:
+```
+sudo su -u <USER> mesos-log initialize --path=<native_log_file_path>
+```
+Where `USER` is the user under which the scheduler instance will be run. For installations using
+Debian packages, the default user will be `aurora`. You may alternatively choose to specify
+a group as well by passing the `-g <GROUP>` option to `su`.
+Note that if the user under which the Aurora scheduler instance is run _does not_ have permissions 
+to read this directory and the files it contains, the instance will fail to start.
 
 ## Restore from backup
 
-* Run the `recovery-tool`. Wherever arguments match those used for the scheduler instance, 
+* Run the `recovery-tool`. Wherever the flags match those used for the scheduler instance, 
 use the same values:
 ```
 $ recovery-tool -from BACKUP \
@@ -67,6 +75,6 @@ the "blank" scheduler instances with the information from the rehydrated instanc
  
 ### If running in singleton mode
 
-* If running the scheduler in  singleton mode, simply start the scheduler instance. 
+* Start the single scheduler instance. 
 
 
