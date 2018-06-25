@@ -23,6 +23,9 @@ from apache.aurora.config.schema.base import CoordinatorSlaPolicy as PystachioCo
 from apache.aurora.config.schema.base import CountSlaPolicy as PystachioCountSlaPolicy
 from apache.aurora.config.schema.base import PartitionPolicy as PystachioPartitionPolicy
 from apache.aurora.config.schema.base import PercentageSlaPolicy as PystachioPercentageSlaPolicy
+from apache.aurora.config.schema.base import QueueUpdateStrategy as PystachioQueueUpdateStrategy
+from apache.aurora.config.schema.base import BatchUpdateStrategy as PystachioBatchUpdateStrategy
+from apache.aurora.config.schema.base import VariableBatchUpdateStrategy as PystachioVariableBatchUpdateStrategy
 from apache.aurora.config.schema.base import (
     AppcImage,
     Container,
