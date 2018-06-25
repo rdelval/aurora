@@ -40,7 +40,7 @@ pushd "$BUILDROOT"
   # TODO(wfarner): The above attempt to fetch pytest versions from pants stopped
   # working with commit 0c177058.  As a workaround, manually specify the versions
   # for now.
-  pytest_requirement='pytest==3.2.3'
+  pytest_requirement='pytest==3.6.1'
   pytest_cov_requirement='pytest-cov==2.5.1'
 
   rm -rf "$VENV_DIR"
