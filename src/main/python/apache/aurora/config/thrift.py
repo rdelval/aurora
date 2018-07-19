@@ -188,15 +188,8 @@ def create_container_config(container):
   raise InvalidConfig('If a container is specified it must set one type.')
 
 def create_update_strategy_config(update_strategy):
-  print("I am an update strategy")
-  print(type(update_strategy))
-  print(update_strategy)
-  print(update_strategy.unwrap())
-
   unwrapped = update_strategy.unwrap()
-
   if unwrapped is Empty:
-    print("I am a queque update strategy")
     return JobUpdateStrategy(
         queueStrategy=QueueJobUpdateStrategy(
             groupSize=1),
@@ -204,7 +197,6 @@ def create_update_strategy_config(update_strategy):
         varBatchStrategy=None)
 
   if isinstance(unwrapped, PystachioQueueUpdateStrategy):
-    print("I am a queue update strategy")
     return JobUpdateStrategy(
         queueStrategy=QueueJobUpdateStrategy(
             groupSize=fully_interpolated(unwrapped.batch_size())),
@@ -212,7 +204,6 @@ def create_update_strategy_config(update_strategy):
         varBatchStrategy=None)
 
   if isinstance(unwrapped, PystachioBatchUpdateStrategy):
-    print("I am a batch update strategy")
     return JobUpdateStrategy(
         queueStrategy=None,
         batchStrategy=BatchJobUpdateStrategy(
@@ -220,7 +211,6 @@ def create_update_strategy_config(update_strategy):
         varBatchStrategy=None)
 
   if isinstance(unwrapped, PystachioVariableBatchUpdateStrategy):
-    print("I am a variable batch update strategy")
     return JobUpdateStrategy(
         queueStrategy=None,
         batchStrategy=None,

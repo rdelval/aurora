@@ -16,37 +16,26 @@ import collections
 from itertools import groupby
 from operator import itemgetter
 
+from pystachio import Empty, Choice
 from twitter.common import log
 
 from gen.apache.aurora.api.ttypes import JobUpdateSettings, Range
+from apache.aurora.config.schema.base import BatchUpdateStrategy as PystachioBatchUpdateStrategy
+from apache.aurora.config.schema.base import QueueUpdateStrategy as PystachioQueueUpdateStrategy
 from apache.aurora.config.thrift import create_update_strategy_config
-from apache.aurora.config.thrift import fully_interpolated
-
 
 class UpdaterConfig(object):
   MIN_PULSE_INTERVAL_SECONDS = 60
 
   def __init__(self, config):
-
-    '''            batch_size,
-               watch_secs,
-               max_per_shard_failures,
-               max_total_failures,
-               update_strategy,
-               rollback_on_failure=True,
-               wait_for_batch_completion=False,
-               pulse_interval_secs=None):'''
-
-
-    print(config)
     self.batch_size = config.batch_size().get()
     self.watch_secs = config.watch_secs().get()
     self.max_total_failures = config.max_total_failures().get()
     self.max_per_instance_failures = config.max_per_shard_failures().get()
     self.update_strategy = config.update_strategy()
-    self.wait_for_batch_completion = config.wait_for_batch_completion().get() if not config.wait_for_batch_completion() else False
-    self.rollback_on_failure = config.rollback_on_failure().get() if not config.rollback_on_failure() else True
-    self.pulse_interval_secs = config.pulse_interval_secs().get() if not config.pulse_interval_secs() else None
+    self.wait_for_batch_completion = config.wait_for_batch_completion().get() if config.wait_for_batch_completion() is not Empty else False
+    self.rollback_on_failure = config.rollback_on_failure().get() if config.rollback_on_failure() is not Empty else True
+    self.pulse_interval_secs = config.pulse_interval_secs().get() if config.pulse_interval_secs() is not Empty else None
 
     if self.batch_size <= 0:
       raise ValueError('Batch size should be greater than 0')
@@ -85,6 +74,12 @@ class UpdaterConfig(object):
     Arguments:
     instances - optional list of instances to update.
     """
+    if self.update_strategy is Empty:
+      if self.wait_for_batch_completion:
+        self.update_strategy = Choice("",[PystachioBatchUpdateStrategy(batch_size=self.batch_size)])
+      else:
+        self.update_strategy = Choice("",[PystachioQueueUpdateStrategy(batch_size=self.batch_size)])
+
     return JobUpdateSettings(
         updateGroupSize=self.batch_size,
         maxPerInstanceFailures=self.max_per_instance_failures,
