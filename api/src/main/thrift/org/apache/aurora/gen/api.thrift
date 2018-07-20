@@ -577,16 +577,16 @@ struct GetJobsResult {
  * (terms are AND'ed together).
  */
 struct TaskQuery {
-  14: string role
-  9: string environment
-  2: string jobName
-  4: set<string> taskIds
-  5: set<ScheduleStatus> statuses
-  7: set<i32> instanceIds
-  10: set<string> slaveHosts
-  11: set<JobKey> jobKeys
-  12: i32 offset
-  13: i32 limit
+  14: optional string role
+  9: optional string environment
+  2: optional string jobName
+  4: optional set<string> taskIds
+  5: optional set<ScheduleStatus> statuses
+  7: optional set<i32> instanceIds
+  10: optional set<string> slaveHosts
+  11: optional set<JobKey> jobKeys
+  12: optional i32 offset
+  13: optional i32 limit
 }
 
 struct HostStatus {
@@ -769,16 +769,22 @@ struct JobUpdateSettings {
    */
   8: bool waitForBatchCompletion
 
- /**
-  * If set, requires external calls to pulseJobUpdate RPC within the specified rate for the
-  * update to make progress. If no pulses received within specified interval the update will
-  * block. A blocked update is unable to continue but retains its current status. It may only get
-  * unblocked by a fresh pulseJobUpdate call.
-  */
+  /**
+   * If set, requires external calls to pulseJobUpdate RPC within the specified rate for the
+   * update to make progress. If no pulses received within specified interval the update will
+   * block. A blocked update is unable to continue but retains its current status. It may only get
+   * unblocked by a fresh pulseJobUpdate call.
+   */
   9: optional i32 blockIfNoPulsesAfterMs
 
+  /**
+   * If true, updates will obey the SLA requirements of the tasks being updated. If the SLA policy
+   * differs between the old and new task configurations, updates will use the newest configuration.
+   */
+  10: optional bool slaAware
+
   /** Update strategy to be used for the update. See JobUpdateStrategy for choices. */
-  10: optional JobUpdateStrategy updateStrategy
+  11: optional JobUpdateStrategy updateStrategy
 }
 
 /** Event marking a state transition in job update lifecycle. */
@@ -809,6 +815,9 @@ struct JobInstanceUpdateEvent {
 
   /** Job update action taken on the instance. */
   3: JobUpdateAction action
+
+  /** Optional message explaining the instance update event. */
+  4: optional string message
 }
 
 /** Maps instance IDs to TaskConfigs it. */

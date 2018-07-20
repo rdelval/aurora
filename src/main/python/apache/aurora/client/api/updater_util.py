@@ -36,6 +36,7 @@ class UpdaterConfig(object):
     self.wait_for_batch_completion = config.wait_for_batch_completion().get() if config.wait_for_batch_completion() is not Empty else False
     self.rollback_on_failure = config.rollback_on_failure().get() if config.rollback_on_failure() is not Empty else True
     self.pulse_interval_secs = config.pulse_interval_secs().get() if config.pulse_interval_secs() is not Empty else None
+    self.sla_aware = config.sla_aware().get() if not Empty else None
 
     if self.batch_size <= 0:
       raise ValueError('Batch size should be greater than 0')
@@ -88,8 +89,10 @@ class UpdaterConfig(object):
         rollbackOnFailure=self.rollback_on_failure,
         waitForBatchCompletion=self.wait_for_batch_completion,
         updateOnlyTheseInstances=self.instances_to_ranges(instances) if instances else None,
-        blockIfNoPulsesAfterMs=self.pulse_interval_secs * 1000 if self.pulse_interval_secs else None,
         updateStrategy=create_update_strategy_config(self.update_strategy),
+        blockIfNoPulsesAfterMs=(self.pulse_interval_secs * 1000 if self.pulse_interval_secs
+            else None),
+        slaAware=self.sla_aware
     )
 
   def __eq__(self, other):
