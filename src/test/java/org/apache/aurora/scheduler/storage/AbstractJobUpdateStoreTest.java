@@ -11,7 +11,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.aurora.scheduler.storage;
 
 import java.util.List;
@@ -22,7 +21,9 @@ import java.util.stream.Stream;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.inject.Guice;
 import com.google.inject.Injector;
+import com.google.inject.Module;
 
 import org.apache.aurora.gen.BatchJobUpdateStrategy;
 import org.apache.aurora.gen.InstanceTaskConfig;
@@ -82,15 +83,17 @@ public abstract class AbstractJobUpdateStoreTest {
   private static final ImmutableSet<Metadata> METADATA =
       ImmutableSet.of(new Metadata("k1", "v1"), new Metadata("k2", "v2"), new Metadata("k3", "v3"));
 
-  private Storage storage;
+  protected Injector injector;
+  protected Storage storage;
+
+  protected abstract Module getStorageModule();
 
   @Before
-  public void setUp() throws Exception {
-    Injector injector = createStorageInjector();
+  public void setUp() {
+    injector = Guice.createInjector(getStorageModule());
     storage = injector.getInstance(Storage.class);
+    storage.prepare();
   }
-
-  protected abstract Injector createStorageInjector();
 
   @After
   public void tearDown() throws Exception {
@@ -488,7 +491,7 @@ public abstract class AbstractJobUpdateStoreTest {
     return makeKey(JOB, id);
   }
 
-  private static IJobUpdateKey makeKey(IJobKey job, String id) {
+  protected static IJobUpdateKey makeKey(IJobKey job, String id) {
     return IJobUpdateKey.build(new JobUpdateKey(job.newBuilder(), id));
   }
 
@@ -517,7 +520,7 @@ public abstract class AbstractJobUpdateStoreTest {
         storeProvider.getJobUpdateStore().fetchJobUpdates(IJobUpdateQuery.build(query)));
   }
 
-  private void saveUpdate(IJobUpdateDetails update) {
+  protected void saveUpdate(IJobUpdateDetails update) {
     storage.write((NoResult.Quiet) storeProvider -> {
       JobUpdateStore.Mutable store = storeProvider.getJobUpdateStore();
       store.saveJobUpdate(update.getUpdate());
@@ -541,7 +544,7 @@ public abstract class AbstractJobUpdateStoreTest {
         storeProvider -> storeProvider.getJobUpdateStore().saveJobInstanceUpdateEvent(key, event));
   }
 
-  private void truncateUpdates() {
+  protected void truncateUpdates() {
     storage.write((NoResult.Quiet)
         storeProvider -> storeProvider.getJobUpdateStore().deleteAllUpdates());
   }
@@ -605,7 +608,7 @@ public abstract class AbstractJobUpdateStoreTest {
         .setMetadata(METADATA));
   }
 
-  private static IJobUpdateDetails makeJobUpdate(IJobUpdateKey key) {
+  protected static IJobUpdateDetails makeJobUpdate(IJobUpdateKey key) {
     return IJobUpdateDetails.build(new JobUpdateDetails()
         .setUpdateEvents(ImmutableList.of(FIRST_EVENT.newBuilder()))
         .setUpdate(new JobUpdate()
