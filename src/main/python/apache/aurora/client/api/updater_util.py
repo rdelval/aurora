@@ -36,7 +36,7 @@ class UpdaterConfig(object):
     self.wait_for_batch_completion = config.wait_for_batch_completion().get() if config.wait_for_batch_completion() is not Empty else False
     self.rollback_on_failure = config.rollback_on_failure().get() if config.rollback_on_failure() is not Empty else True
     self.pulse_interval_secs = config.pulse_interval_secs().get() if config.pulse_interval_secs() is not Empty else None
-    self.sla_aware = config.sla_aware().get() if not Empty else None
+    self.sla_aware = config.sla_aware().get() if config.sla_aware() is not Empty else None
 
     if self.batch_size <= 0:
       raise ValueError('Batch size should be greater than 0')
@@ -75,11 +75,12 @@ class UpdaterConfig(object):
     Arguments:
     instances - optional list of instances to update.
     """
+
     if self.update_strategy is Empty:
       if self.wait_for_batch_completion:
-        self.update_strategy = Choice("",[PystachioBatchUpdateStrategy(batch_size=self.batch_size)])
+        self.update_strategy = Choice("", [PystachioBatchUpdateStrategy(batch_size=self.batch_size)])
       else:
-        self.update_strategy = Choice("",[PystachioQueueUpdateStrategy(batch_size=self.batch_size)])
+        self.update_strategy = Choice("", [PystachioQueueUpdateStrategy(batch_size=self.batch_size)])
 
     return JobUpdateSettings(
         updateGroupSize=self.batch_size,
