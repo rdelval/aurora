@@ -35,9 +35,23 @@
     retrying an SLA-aware kill (using a truncated binary backoff).
     3. `sla_aware_kill_retry_max_delay (default: 5mins)`: the maximum amount of time to wait before
     retrying an SLA-aware kill (using a truncated binary backoff).
+- New update strategy added: Variable Batch Update. With this strategy, a job may be updated in 
+in batches of different sizes. For example, an update which contains an instance count of 10 may 
+be done in batch sizes of 2, 3, and 5. Each batch behaves in the same way as the static batch 
+update strategy where the group size remains constant throughout the update.  
+A new field has been added to `UpdateConfig` called `update_strategy`.
+Update strategy may take a `QueueUpdateStrategy`, `BatchUpdateStrategy`, 
+or a `VariableBatchUpdateStrategy` object. `QueueUpdateStrategy` and `BatchUpdateStrategy` take 
+a single integer argument while `VariableBatchUpdateStrategy` takes a list of positive integers 
+as an argument.
 
 ### Deprecations and removals:
 
+- Deprecated use of Thrift fields `JobUpdateSettings.waitForBatchCompletion` and 
+  `JobUpdateSettings.updateGroupSize`. Please set the proper `JobUpdateSettings.updateStrategy`
+  instead. Note that these same constructs, as represented in the Aurora DSL, are still valid 
+  as they will be converted to the new field automatically by the client 
+  for backwards compatibility.
 - Deprecated the `aurora_admin host_drain` command used for maintenance. With this release the SLA
   computations are moved to the scheduler and it is no longer required for the client to compute
   SLAs and watch the drains. The scheduler persists any host maintenance request and performs
