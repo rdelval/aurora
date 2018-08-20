@@ -119,6 +119,7 @@ interface UpdateFactory {
 
       // Note: Verification that the update strategy exists and is valid has already taken
       // place when the scheduler receives the thrift call.
+      // TODO(rdelvalle): Consider combining Batch Update and Variable Batch update strategies.
       if (settings.getUpdateStrategy().isSetBatchStrategy()) {
         strategy = new BatchStrategy<>(
             updateOrder,
