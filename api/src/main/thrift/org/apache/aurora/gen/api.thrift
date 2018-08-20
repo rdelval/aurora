@@ -743,9 +743,9 @@ union JobUpdateStrategy {
 
 /** Job update thresholds and limits. **/
 struct JobUpdateSettings {
-  /** TODO(rdelvalle): Deprecated, please set value inside of desired update strategy instead.
-  * Max number of instances being updated at any given moment.
-  */
+  /** Deprecated, please set value inside of desired update strategy instead.
+   * Max number of instances being updated at any given moment.
+   */
   1: i32 updateGroupSize
 
   /** Max number of instance failures to tolerate before marking instance as FAILED. */
@@ -763,7 +763,7 @@ struct JobUpdateSettings {
   /** Instance IDs to act on. All instances will be affected if this is not set. */
   7: set<Range> updateOnlyTheseInstances
 
-  /** TODO(rdelvalle): Deprecated, please set updateStrategy to the Batch strategy instead.
+  /** Deprecated, please set updateStrategy to the Batch strategy instead.
    * If true, use updateGroupSize as strict batching boundaries, and avoid proceeding to another
    * batch until the preceding batch finishes updating.
    */
