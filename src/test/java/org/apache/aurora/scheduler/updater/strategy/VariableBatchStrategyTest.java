@@ -13,13 +13,16 @@
  */
 package org.apache.aurora.scheduler.updater.strategy;
 
-import static com.google.common.collect.ImmutableSet.of;
-import static org.junit.Assert.assertEquals;
+import java.util.Set;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
-import java.util.Set;
+
 import org.junit.Test;
+
+import static com.google.common.collect.ImmutableSet.of;
+
+import static org.junit.Assert.assertEquals;
 
 public class VariableBatchStrategyTest {
 
@@ -114,7 +117,7 @@ public class VariableBatchStrategyTest {
   @Test
   public void testMoreInstancesThanSteps() {
     UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING,
-        ImmutableList.of(1,2),
+        ImmutableList.of(1, 2),
         true);
     assertEquals(of(0), strategy.getNextGroup(of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9), EMPTY));
     assertEquals(of(1, 2), strategy.getNextGroup(of(1, 2, 3, 4, 5, 6, 7, 8, 9), EMPTY));

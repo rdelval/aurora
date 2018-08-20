@@ -1843,7 +1843,8 @@ public class JobUpdaterIT extends EasyMockTest {
                 .setInstances(ImmutableSet.of(new Range(0, 2))))
             .setSettings(new JobUpdateSettings()
                 .setUpdateStrategy(
-                    JobUpdateStrategy.queueStrategy(new QueueJobUpdateStrategy().setGroupSize(1)))
+                    JobUpdateStrategy.queueStrategy(
+                        new QueueJobUpdateStrategy().setGroupSize(updateGroupSize)))
                 .setRollbackOnFailure(true)
                 .setMinWaitInInstanceRunningMs(WATCH_TIMEOUT.as(Time.MILLISECONDS).intValue())
                 .setUpdateOnlyTheseInstances(ImmutableSet.of())));
