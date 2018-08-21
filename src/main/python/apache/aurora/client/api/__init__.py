@@ -148,7 +148,8 @@ class AuroraClientAPI(object):
 
   def _job_update_request(self, config, instances=None, metadata=None):
     try:
-      settings = UpdaterConfig(config.update_config()).to_thrift_update_settings(instances)
+      print(config.update_config().get())
+      settings = UpdaterConfig(**config.update_config().get()).to_thrift_update_settings(instances)
     except ValueError as e:
       raise self.UpdateConfigError(str(e))
 

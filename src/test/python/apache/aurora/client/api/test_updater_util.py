@@ -16,6 +16,11 @@ import unittest
 from pytest import raises
 
 from apache.aurora.client.api import UpdaterConfig
+from apache.aurora.config.schema.base import (
+  QueueUpdateStrategy as PystachioQueueUpdateStrategy,
+  BatchUpdateStrategy as PystachioBatchUpdateStrategy,
+  VariableBatchUpdateStrategy as PystachioVariableBatchUpdateStrategy,
+)
 
 from gen.apache.aurora.api.ttypes import Range
 
@@ -57,4 +62,11 @@ class TestRangeConversion(unittest.TestCase):
     threshold = UpdaterConfig.MIN_PULSE_INTERVAL_SECONDS
     with raises(ValueError) as e:
       UpdaterConfig(1, 1, 1, 1, pulse_interval_secs=threshold - 1)
+    assert 'Pulse interval seconds must be at least %s seconds.' % threshold in e.value.message
+
+  def test_variable_batch(self):
+    config = UpdaterConfig(1, 1, 1, 1)
+    threshold = UpdaterConfig.MIN_PULSE_INTERVAL_SECONDS
+    with raises(ValueError) as e:
+      UpdaterConfig(1, 1, 1, 1, update_config=threshold - 1)
     assert 'Pulse interval seconds must be at least %s seconds.' % threshold in e.value.message

@@ -18,15 +18,17 @@ import re
 from pystachio import Empty, Ref
 from twitter.common.lang import Compatibility
 
-from apache.aurora.config.schema.base import AppcImage as PystachioAppcImage
-from apache.aurora.config.schema.base import BatchUpdateStrategy as PystachioBatchUpdateStrategy
-from apache.aurora.config.schema.base import Container as PystachioContainer
-from apache.aurora.config.schema.base import CoordinatorSlaPolicy as PystachioCoordinatorSlaPolicy
-from apache.aurora.config.schema.base import CountSlaPolicy as PystachioCountSlaPolicy
-from apache.aurora.config.schema.base import DockerImage as PystachioDockerImage
-from apache.aurora.config.schema.base import PercentageSlaPolicy as PystachioPercentageSlaPolicy
-from apache.aurora.config.schema.base import QueueUpdateStrategy as PystachioQueueUpdateStrategy
-from apache.aurora.config.schema.base import VariableBatchUpdateStrategy as PystachioVariableBatchUpdateStrategy
+from apache.aurora.config.schema.base import (
+    AppcImage as PystachioAppcImage,
+    BatchUpdateStrategy as PystachioBatchUpdateStrategy,
+    Container as PystachioContainer,
+    CoordinatorSlaPolicy as PystachioCoordinatorSlaPolicy,
+    CountSlaPolicy as PystachioCountSlaPolicy,
+    DockerImage as PystachioDockerImage,
+    PercentageSlaPolicy as PystachioPercentageSlaPolicy,
+    QueueUpdateStrategy as PystachioQueueUpdateStrategy,
+    VariableBatchUpdateStrategy as PystachioVariableBatchUpdateStrategy
+)
 from apache.aurora.config.schema.base import (
     Docker,
     HealthCheckConfig,
@@ -187,6 +189,7 @@ def create_container_config(container):
 
   raise InvalidConfig('If a container is specified it must set one type.')
 
+
 def create_update_strategy_config(update_strategy):
   unwrapped = update_strategy.unwrap()
   if unwrapped is Empty:
@@ -216,6 +219,7 @@ def create_update_strategy_config(update_strategy):
         batchStrategy=None,
         varBatchStrategy=VariableBatchJobUpdateStrategy(
             groupSizes=fully_interpolated(unwrapped.batch_sizes())))
+
 
 def volumes_to_thrift(volumes):
   thrift_volumes = []
