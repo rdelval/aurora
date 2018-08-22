@@ -20,8 +20,11 @@ from pystachio import Empty, Choice
 from twitter.common import log
 
 from gen.apache.aurora.api.ttypes import JobUpdateSettings, Range
-from apache.aurora.config.schema.base import BatchUpdateStrategy as PystachioBatchUpdateStrategy
-from apache.aurora.config.schema.base import QueueUpdateStrategy as PystachioQueueUpdateStrategy
+from apache.aurora.config.schema.base import (
+ BatchUpdateStrategy as PystachioBatchUpdateStrategy,
+ QueueUpdateStrategy as PystachioQueueUpdateStrategy,
+ VariableBatchUpdateStrategy as PystachioVariableBatchUpdateStrategy
+)
 from apache.aurora.config.thrift import create_update_strategy_config
 
 class UpdaterConfig(object):
@@ -33,18 +36,32 @@ class UpdaterConfig(object):
     self.max_total_failures = config.max_total_failures().get()
     self.max_per_instance_failures = config.max_per_shard_failures().get()
     self.update_strategy = config.update_strategy()
-    self.wait_for_batch_completion = config.wait_for_batch_completion().get() if config.wait_for_batch_completion() is not Empty else False
-    self.rollback_on_failure = config.rollback_on_failure().get() if config.rollback_on_failure() is not Empty else True
-    self.pulse_interval_secs = config.pulse_interval_secs().get() if config.pulse_interval_secs() is not Empty else None
-    self.sla_aware = config.sla_aware().get() if config.sla_aware() is not Empty else None
+    self.sla_aware = None
+    self.rollback_on_failure = True
+    self.pulse_interval_secs = None
+    self.wait_for_batch_completion = False
+
+    # Override default values if they are provided.
+    if config.sla_aware() is not Empty:
+      self.sla_aware = config.sla_aware().get()
+
+    if config.wait_for_batch_completion() is not Empty:
+      self.wait_for_batch_completion = config.wait_for_batch_completion().get()
+
+    if config.pulse_interval_secs() is not Empty:
+      self.pulse_interval_secs = config.pulse_interval_secs().get()
+
+    if config.rollback_on_failure() is not Empty:
+      self.rollback_on_failure = config.rollback_on_failure().get()
 
     if self.batch_size <= 0:
       raise ValueError('Batch size should be greater than 0')
     if self.watch_secs < 0:
       raise ValueError('Watch seconds should be greater than or equal to 0')
-    if self.pulse_interval_secs is not None and self.pulse_interval_secs < self.MIN_PULSE_INTERVAL_SECONDS:
+    if (self.pulse_interval_secs is not None and
+            self.pulse_interval_secs < self.MIN_PULSE_INTERVAL_SECONDS):
       raise ValueError('Pulse interval seconds must be at least %s seconds.'
-                       % self.MIN_PULSE_INTERVAL_SECONDS)
+                      % self.MIN_PULSE_INTERVAL_SECONDS)
 
   @classmethod
   def instances_to_ranges(cls, instances):
@@ -77,10 +94,13 @@ class UpdaterConfig(object):
     """
 
     if self.update_strategy is Empty:
+      update_strategy = Choice([PystachioQueueUpdateStrategy,
+                                PystachioBatchUpdateStrategy,
+                                PystachioVariableBatchUpdateStrategy])
       if self.wait_for_batch_completion:
-        self.update_strategy = Choice("", [PystachioBatchUpdateStrategy(batch_size=self.batch_size)])
+        self.update_strategy = update_strategy(PystachioBatchUpdateStrategy(batch_size=self.batch_size))
       else:
-        self.update_strategy = Choice("", [PystachioQueueUpdateStrategy(batch_size=self.batch_size)])
+        self.update_strategy = update_strategy(PystachioQueueUpdateStrategy(batch_size=self.batch_size))
 
     return JobUpdateSettings(
         updateGroupSize=self.batch_size,
