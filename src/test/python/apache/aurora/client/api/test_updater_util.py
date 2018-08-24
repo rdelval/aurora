@@ -48,7 +48,11 @@ class TestRangeConversion(unittest.TestCase):
 
   def test_pulse_interval_secs(self):
     config = UpdaterConfig(
-      UpdateConfig(batch_size=1, watch_secs=1, max_per_shard_failures=1, max_total_failures=1, pulse_interval_secs=60))
+      UpdateConfig(batch_size=1,
+                   watch_secs=1,
+                   max_per_shard_failures=1,
+                   max_total_failures=1,
+                   pulse_interval_secs=60))
     assert 60000 == config.to_thrift_update_settings().blockIfNoPulsesAfterMs
 
   def test_pulse_interval_unset(self):
