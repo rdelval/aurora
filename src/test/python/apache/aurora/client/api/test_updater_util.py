@@ -12,17 +12,41 @@
 # limitations under the License.
 #
 import unittest
+import copy
 
 from pytest import raises
+from pystachio import Choice
 
+from gen.apache.aurora.api.ttypes import (
+  JobUpdateSettings,
+  JobUpdateStrategy,
+  VariableBatchJobUpdateStrategy,
+  BatchJobUpdateStrategy,
+  QueueJobUpdateStrategy
+)
 from apache.aurora.client.api import UpdaterConfig
 from apache.aurora.config.schema.base import UpdateConfig
+from apache.aurora.config.schema.base import (
+  BatchUpdateStrategy as PystachioBatchUpdateStrategy,
+  QueueUpdateStrategy as PystachioQueueUpdateStrategy,
+  VariableBatchUpdateStrategy as PystachioVariableBatchUpdateStrategy
+)
 
 from gen.apache.aurora.api.ttypes import Range
 
 
-class TestRangeConversion(unittest.TestCase):
-  """Job instance ID to range conversion."""
+class TestUpdaterUtil(unittest.TestCase):
+
+  EXPECTED_JOB_UPDATE_SETTINGS = JobUpdateSettings(
+    blockIfNoPulsesAfterMs=None,
+    updateOnlyTheseInstances=None,
+    slaAware=False,
+    maxPerInstanceFailures=0,
+    waitForBatchCompletion=False,
+    rollbackOnFailure=True,
+    minWaitInInstanceRunningMs=45000,
+    updateGroupSize=1,
+    maxFailedInstances=0)
 
   def test_multiple_ranges(self):
     """Test multiple ranges."""
@@ -69,3 +93,72 @@ class TestRangeConversion(unittest.TestCase):
                                  max_total_failures=1,
                                  pulse_interval_secs=threshold - 1))
     assert 'Pulse interval seconds must be at least %s seconds.' % threshold in e.value.message
+
+  def test_to_thrift_update_settings_strategy(self):
+
+    """Test to_thrift produces an expected thrift update settings configuration
+       from a PyStachio update object.
+    """
+
+    update_strategy = Choice([PystachioQueueUpdateStrategy,
+                              PystachioBatchUpdateStrategy,
+                              PystachioVariableBatchUpdateStrategy])
+
+    config = UpdaterConfig(
+      UpdateConfig(
+        update_strategy=update_strategy(
+          PystachioVariableBatchUpdateStrategy(batch_sizes=[1, 2, 3, 4]))))
+
+    thrift_update_config = config.to_thrift_update_settings()
+
+    update_settings = copy.deepcopy(self.EXPECTED_JOB_UPDATE_SETTINGS)
+
+    update_settings.updateStrategy = JobUpdateStrategy(
+      batchStrategy=None,
+      queueStrategy=None,
+      varBatchStrategy=VariableBatchJobUpdateStrategy(groupSizes=(1, 2, 3, 4)))
+
+    assert thrift_update_config == update_settings
+
+  def test_to_thrift_update_settings_no_strategy_queue(self):
+
+    """Test to_thrift produces an expected thrift update settings configuration
+       from a PyStachio update object that doesn't include an update strategy.
+
+       The configuration in this test should be converted to a
+       QueueJobUpdateStrategy.
+    """
+
+    config = UpdaterConfig(UpdateConfig())
+
+    thrift_update_config = config.to_thrift_update_settings()
+
+    update_settings = copy.deepcopy(self.EXPECTED_JOB_UPDATE_SETTINGS)
+    update_settings.updateStrategy = JobUpdateStrategy(
+        batchStrategy=None,
+        queueStrategy=QueueJobUpdateStrategy(groupSize=1),
+        varBatchStrategy=None)
+
+    assert thrift_update_config == update_settings
+
+  def test_to_thrift_update_settings_no_strategy_batch(self):
+
+    """Test to_thrift produces an expected thrift update settings configuration
+       from a PyStachio update object that doesn't include an update strategy.
+
+       The configuration in this test should be converted to a
+       BatchJobUpdateStrategy.
+    """
+
+    config = UpdaterConfig(UpdateConfig(wait_for_batch_completion=True))
+
+    thrift_update_config = config.to_thrift_update_settings()
+
+    update_settings = copy.deepcopy(self.EXPECTED_JOB_UPDATE_SETTINGS)
+    update_settings.updateStrategy = JobUpdateStrategy(
+        batchStrategy=BatchJobUpdateStrategy(groupSize=1),
+        queueStrategy=None,
+        varBatchStrategy=None)
+    update_settings.waitForBatchCompletion = True
+
+    assert thrift_update_config == update_settings
