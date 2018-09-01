@@ -1,14 +1,14 @@
 import moment from 'moment';
 import React from 'react';
 
+import { isNully } from '../utils/Common';
+
 export default function UpdateSettings({ update }) {
   const settings = update.update.instructions.settings;
+
   return (<div>
     <table className='update-settings'>
-      <tr>
-        <td>Batch Size</td>
-        <td>{settings.updateGroupSize}</td>
-      </tr>
+      <UpdateStrategy strategy={settings.updateStrategy}/>
       <tr>
         <td>Max Failures Per Instance</td>
         <td>{settings.maxPerInstanceFailures}</td>
@@ -31,4 +31,44 @@ export default function UpdateSettings({ update }) {
       </tr>
     </table>
   </div>);
+}
+
+function UpdateStrategy(config) {
+
+    if (isNully(config.strategy)) {
+        return null;
+    }
+
+    const strategy = config.strategy
+
+    if (!isNully(strategy.queueStrategy)) {
+        return [<tr>
+            <td>Update Strategy</td>
+            <td>Queue</td>
+        </tr>,
+            <tr>
+            <td>Max Parallel Updates</td>
+            <td>{strategy.queueStrategy.groupSize}</td>
+        </tr>];
+    } else if (!isNully(strategy.batchStrategy)) {
+        return [<tr>
+            <td>Update Strategy</td>
+            <td>Batch</td>
+        </tr>,
+            <tr>
+                <td>Batch Size</td>
+                <td>{strategy.batchStrategy.groupSize}</td>
+            </tr>];
+    } else if (!isNully(strategy.varBatchStrategy)) {
+        return [<tr>
+            <td>Update Strategy</td>
+            <td>Variable Batch</td>
+        </tr>,
+            <tr>
+                <td>Batch Sizes</td>
+                <td>{strategy.varBatchStrategy.groupSizes.toString()}</td>
+            </tr>];
+    }
+
+    return null;
 }
