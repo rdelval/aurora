@@ -35,6 +35,8 @@ export default function UpdateSettings({ update }) {
   </div>);
 }
 
+// ESLint doesn't like React's new adjacent elements, so we need to disable it here
+/* eslint-disable */
 function UpdateStrategy({ strategy }) {
   if (isNully(strategy)) {
     return null;
@@ -44,7 +46,8 @@ function UpdateStrategy({ strategy }) {
     return [<tr>
       <td>Strategy</td>
       <td>Queue</td>
-    </tr>, <tr>
+    </tr>,
+    <tr>
       <td>Max Parallel Updates</td>
       <td>{ strategy.queueStrategy.groupSize }</td>
     </tr>];
@@ -52,7 +55,8 @@ function UpdateStrategy({ strategy }) {
     return [<tr>
       <td>Strategy</td>
       <td>Batch</td>
-    </tr>, <tr>
+    </tr>,
+    <tr>
       <td>Batch Size</td>
       <td>{ strategy.batchStrategy.groupSize }</td>
     </tr>];
@@ -60,7 +64,8 @@ function UpdateStrategy({ strategy }) {
     return [<tr>
       <td>Strategy</td>
       <td>Variable Batch</td>
-    </tr>, <tr>
+    </tr>,
+    <tr>
       <td>Batch Sizes</td>
       <td>{ strategy.varBatchStrategy.groupSizes.toString() }</td>
     </tr>];
@@ -68,3 +73,5 @@ function UpdateStrategy({ strategy }) {
 
   return null;
 }
+
+/* eslint-enable */
