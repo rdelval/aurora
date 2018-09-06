@@ -42,7 +42,7 @@ function UpdateStrategy({ strategy }) {
 
   if (!isNully(strategy.queueStrategy)) {
     return [<tr>
-      <td>Update Strategy</td>
+      <td>Strategy</td>
       <td>Queue</td>
     </tr>, <tr>
       <td>Max Parallel Updates</td>
@@ -50,7 +50,7 @@ function UpdateStrategy({ strategy }) {
     </tr>];
   } else if (!isNully(strategy.batchStrategy)) {
     return [<tr>
-      <td>Update Strategy</td>
+      <td>Strategy</td>
       <td>Batch</td>
     </tr>, <tr>
       <td>Batch Size</td>
@@ -58,7 +58,7 @@ function UpdateStrategy({ strategy }) {
     </tr>];
   } else if (!isNully(strategy.varBatchStrategy)) {
     return [<tr>
-      <td>Update Strategy</td>
+      <td>Strategy</td>
       <td>Variable Batch</td>
     </tr>, <tr>
       <td>Batch Sizes</td>
