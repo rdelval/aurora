@@ -71,34 +71,35 @@ class SandboxProvider(Interface):
 
 
 class DefaultSandboxProvider(SandboxProvider):
-  SANDBOX_NAME = 'sandbox'
   MESOS_DIRECTORY_ENV_VARIABLE = 'MESOS_DIRECTORY'
 
   def from_assigned_task(self, assigned_task, **kwargs):
-    sandbox_root = os.path.join(os.environ[self.MESOS_DIRECTORY_ENV_VARIABLE], self.SANDBOX_NAME)
+    mesos_dir = os.environ[self.MESOS_DIRECTORY_ENV_VARIABLE]
 
     container = assigned_task.task.container
     if container.docker:
-      return DockerDirectorySandbox(sandbox_root, **kwargs)
+      return DockerDirectorySandbox(mesos_dir, **kwargs)
     elif container.mesos and container.mesos.image:
       return FileSystemImageSandbox(
-          sandbox_root,
+          mesos_dir,
           user=self._get_sandbox_user(assigned_task),
           **kwargs)
     else:
-      return DirectorySandbox(sandbox_root, user=self._get_sandbox_user(assigned_task), **kwargs)
+      return DirectorySandbox(mesos_dir, user=self._get_sandbox_user(assigned_task), **kwargs)
 
 
 class DirectorySandbox(SandboxInterface):
   """ Basic sandbox implementation using a directory on the filesystem """
 
-  def __init__(self, root, user=getpass.getuser(), **kwargs):
-    self._root = root
+  SANDBOX_NAME = 'sandbox'
+
+  def __init__(self, mesos_dir, user=getpass.getuser(), **kwargs):
+    self._mesos_dir = mesos_dir
     self._user = user
 
   @property
   def root(self):
-    return self._root
+    return os.path.join(self._mesos_dir, self.SANDBOX_NAME)
 
   @property
   def container_root(self):
@@ -137,6 +138,15 @@ class DirectorySandbox(SandboxInterface):
       pwent, grent = self.get_user_and_group()
 
       try:
+        # Mesos provides a sandbox directory with permission 0750 owned by the user of the executor.
+        # In case of Thermos this is `root`, as Thermos takes the responsibility to drop
+        # privileges to the designated non-privileged user/role. To ensure non-provileged processes
+        # can still read their sandbox, Thermos must also update the permissions of the scratch
+        # directory created by Mesos.
+        # This is necessary since Mesos 1.6.0 (https://issues.apache.org/jira/browse/MESOS-8332).
+        log.debug('DirectorySandbox: chown %s:%s %s' % (self._user, grent.gr_name, self._mesos_dir))
+        os.chown(self._mesos_dir, pwent.pw_uid, pwent.pw_gid)
+
         log.debug('DirectorySandbox: chown %s:%s %s' % (self._user, grent.gr_name, self.root))
         os.chown(self.root, pwent.pw_uid, pwent.pw_gid)
         log.debug('DirectorySandbox: chmod 700 %s' % self.root)
@@ -154,26 +164,24 @@ class DirectorySandbox(SandboxInterface):
 class DockerDirectorySandbox(DirectorySandbox):
   """ A sandbox implementation that configures the sandbox correctly for docker containers. """
 
-  def __init__(self, root, **kwargs):
-    self._mesos_host_sandbox = os.environ[DefaultSandboxProvider.MESOS_DIRECTORY_ENV_VARIABLE]
-
+  def __init__(self, mesos_dir, **kwargs):
     # remove the user value from kwargs if it was set.
     kwargs.pop('user', None)
 
-    super(DockerDirectorySandbox, self).__init__(root, user=None, **kwargs)
+    super(DockerDirectorySandbox, self).__init__(mesos_dir, user=None, **kwargs)
 
   def _create_symlinks(self):
     # This sets up the container to have a similar directory structure to the host.
-    # It takes self._mesos_host_sandbox (e.g. "[exec-root]/runs/RUN1/") and:
+    # It takes self._mesos_dir (e.g. "[exec-root]/runs/RUN1/") and:
     #   - Sets mesos_host_sandbox_root = "[exec-root]/runs/" (one level up from mesos_host_sandbox)
     #   - Creates mesos_host_sandbox_root (recursively)
-    #   - Symlinks _mesos_host_sandbox -> $MESOS_SANDBOX (typically /mnt/mesos/sandbox)
+    #   - Symlinks self._mesos_dir -> $MESOS_SANDBOX (typically /mnt/mesos/sandbox)
     # $MESOS_SANDBOX is provided in the environment by the Mesos containerizer.
 
-    mesos_host_sandbox_root = os.path.dirname(self._mesos_host_sandbox)
+    mesos_host_sandbox_root = os.path.dirname(self._mesos_dir)
     try:
       safe_mkdir(mesos_host_sandbox_root)
-      os.symlink(os.environ['MESOS_SANDBOX'], self._mesos_host_sandbox)
+      os.symlink(os.environ['MESOS_SANDBOX'], self._mesos_dir)
     except (IOError, OSError) as e:
       raise self.CreationError('Failed to create the sandbox root: %s' % e)
 
@@ -195,10 +203,8 @@ class FileSystemImageSandbox(DirectorySandbox):
   # already exists.
   _USER_OR_GROUP_NAME_EXISTS = 9
 
-  def __init__(self, root, **kwargs):
-    self._task_fs_root = os.path.join(
-        os.environ[DefaultSandboxProvider.MESOS_DIRECTORY_ENV_VARIABLE],
-        TASK_FILESYSTEM_MOUNT_POINT)
+  def __init__(self, mesos_dir, **kwargs):
+    self._task_fs_root = os.path.join(mesos_dir, TASK_FILESYSTEM_MOUNT_POINT)
 
     self._no_create_user = kwargs.pop('no_create_user', False)
     self._mounted_volume_paths = kwargs.pop('mounted_volume_paths', None)
@@ -208,7 +214,7 @@ class FileSystemImageSandbox(DirectorySandbox):
       raise self.Error(
           'Failed to initialize FileSystemImageSandbox: no value specified for sandbox_mount_point')
 
-    super(FileSystemImageSandbox, self).__init__(root, **kwargs)
+    super(FileSystemImageSandbox, self).__init__(mesos_dir, **kwargs)
 
   def _verify_group_match_in_taskfs(self, group_id, group_name):
     try:
