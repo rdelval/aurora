@@ -807,17 +807,13 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
         return invalidRequest(INVALID_GROUP_SIZE);
       }
 
-      if (strategy.getGroupSizes().size() == 0) {
-        return invalidRequest(TOO_FEW_STEPS);
-      }
-
       totalInstancesFromGroups = strategy.getGroupSizes().stream().reduce(0, Integer::sum);
     } else {
       return invalidRequest(UNKNOWN_UPDATE_STRATEGY);
     }
 
     if (totalInstancesFromGroups <= 0) {
-      return invalidRequest(INVALID_GROUPS_SUM);
+      return invalidRequest(NO_INSTANCES_MODIFIED);
     }
 
     if (settings.getMaxPerInstanceFailures() < 0) {
@@ -1049,7 +1045,6 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
   static String noCronScheduleMessage(IJobKey jobKey) {
     return String.format("Job %s has no cron schedule", JobKeys.canonicalString(jobKey));
   }
-
   @VisibleForTesting
   static String notScheduledCronMessage(IJobKey jobKey) {
     return String.format("Job %s is not scheduled with cron", JobKeys.canonicalString(jobKey));
@@ -1070,17 +1065,13 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
   static final String NO_CRON = "Cron jobs may only be created/updated by calling scheduleCronJob.";
 
   @VisibleForTesting
+  static final String NO_INSTANCES_MODIFIED = "Update results in no instance being modified.";
+
+  @VisibleForTesting
   static final String NON_SERVICE_TASK = "Updates are not supported for non-service tasks.";
 
   @VisibleForTesting
   static final String INVALID_GROUP_SIZE = "All update group sizes must be positive.";
-
-  @VisibleForTesting
-  static final String INVALID_GROUPS_SUM = "Sum of all group sizes must be positive.";
-
-  @VisibleForTesting
-  static final String TOO_FEW_STEPS = "One or more steps must be included as "
-      + "part of chosen update strategy.";
 
   @VisibleForTesting
   static final String INVALID_MAX_FAILED_INSTANCES = "maxFailedInstances must be non-negative.";

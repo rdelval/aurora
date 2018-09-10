@@ -72,6 +72,7 @@ import org.apache.aurora.gen.TaskConfig;
 import org.apache.aurora.gen.TaskConstraint;
 import org.apache.aurora.gen.TaskQuery;
 import org.apache.aurora.gen.ValueConstraint;
+import org.apache.aurora.gen.VariableBatchJobUpdateStrategy;
 import org.apache.aurora.gen.apiConstants;
 import org.apache.aurora.scheduler.base.Query;
 import org.apache.aurora.scheduler.base.TaskTestUtil;
@@ -1481,8 +1482,38 @@ public class SchedulerThriftInterfaceTest extends EasyMockTest {
         JobUpdateStrategy.queueStrategy(new QueueJobUpdateStrategy().setGroupSize(0)));
 
     assertEquals(
-        invalidResponse(SchedulerThriftInterface.INVALID_GROUPS_SUM),
+        invalidResponse(SchedulerThriftInterface.NO_INSTANCES_MODIFIED),
         thrift.startJobUpdate(updateRequest, AUDIT_MESSAGE));
+    assertEquals(0L, statsProvider.getLongValue(START_JOB_UPDATE));
+  }
+
+  @Test
+  public void testStartUpdateFailsInvalidGroupSizeVariableBatch() throws Exception {
+    control.replay();
+
+    JobUpdateRequest updateRequest = buildServiceJobUpdateRequest();
+    updateRequest.getSettings().setUpdateStrategy(
+            JobUpdateStrategy.varBatchStrategy(
+                    new VariableBatchJobUpdateStrategy().setGroupSizes(ImmutableList.of(1,2,0,4))));
+
+    assertEquals(
+            invalidResponse(SchedulerThriftInterface.INVALID_GROUP_SIZE),
+            thrift.startJobUpdate(updateRequest, AUDIT_MESSAGE));
+    assertEquals(0L, statsProvider.getLongValue(START_JOB_UPDATE));
+  }
+
+  @Test
+  public void testStartUpdateFailsInvalidGroupsSum() throws Exception {
+    control.replay();
+
+    JobUpdateRequest updateRequest = buildServiceJobUpdateRequest();
+    updateRequest.getSettings().setUpdateStrategy(
+            JobUpdateStrategy.varBatchStrategy(
+                    new VariableBatchJobUpdateStrategy().setGroupSizes(ImmutableList.of())));
+
+    assertEquals(
+            invalidResponse(SchedulerThriftInterface.NO_INSTANCES_MODIFIED),
+            thrift.startJobUpdate(updateRequest, AUDIT_MESSAGE));
     assertEquals(0L, statsProvider.getLongValue(START_JOB_UPDATE));
   }
 

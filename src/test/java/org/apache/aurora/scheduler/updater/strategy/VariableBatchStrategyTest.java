@@ -44,7 +44,7 @@ public class VariableBatchStrategyTest {
   }
 
   @Test
-  public void testWaitForBatchCompletion() {
+  public void testVariableBatchCompletion() {
     UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING,
         ImmutableList.of(2),
         true);
