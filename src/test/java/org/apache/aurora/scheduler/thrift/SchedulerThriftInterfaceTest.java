@@ -1494,7 +1494,7 @@ public class SchedulerThriftInterfaceTest extends EasyMockTest {
     JobUpdateRequest updateRequest = buildServiceJobUpdateRequest();
     updateRequest.getSettings().setUpdateStrategy(
             JobUpdateStrategy.varBatchStrategy(
-                    new VariableBatchJobUpdateStrategy().setGroupSizes(ImmutableList.of(1,2,0,4))));
+                    new VariableBatchJobUpdateStrategy().setGroupSizes(ImmutableList.of(1, 0, 4))));
 
     assertEquals(
             invalidResponse(SchedulerThriftInterface.INVALID_GROUP_SIZE),
