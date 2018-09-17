@@ -26,5 +26,10 @@ task = SequentialTask(
   resources = Resources(cpu = .10, ram = 8*MB, disk = 8*MB))
 
 jobs = [Service(
-  task = task, cluster = 'devcluster', role = 'www-data', environment = 'prod', name = 'hello', instances = 6,
-update_config = UpdateConfig(update_strategy = VariableBatchUpdateStrategy(batch_sizes = [1,2,3])))]
+  task = task,
+  cluster = 'devcluster',
+  role = 'www-data',
+  environment = 'prod',
+  name = 'hello',
+  instances = 6,
+  update_config = UpdateConfig(update_strategy = VariableBatchUpdateStrategy(batch_sizes = [1,2,3])))]
