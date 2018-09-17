@@ -397,8 +397,13 @@ Update strategy which will wait until a maximum of ``batch_size`` number of inst
 
 ### VariableBatchUpdateStrategy Objects
 
-Similar to Batch Update strategy, this strategy will wait until all instances in a current group are updated before updating more instances.
-However, with this strategy the size of each group may change as the update progresses.
+Similar to Batch Update strategy, this strategy will wait until all instances in a current group are
+updated before updating more instances. However, instead of maintaining a static group size, the
+size of each group may change as the update progresses. For example, an update which modifies a
+total of 10 instances may be done in batch sizes of 2, 3, and 5. If the number of instances to
+be updated are greater than the sum of the groups, the last group size will be used in
+perpetuity until all instances are updated. Following the previous example, if instead of 10
+instances 20 instances are modified, the update groups would become: 2, 3, 5, 5, 5.
 
 | object                       | type     | description
 | ---------------------------- | :------: | ------------
