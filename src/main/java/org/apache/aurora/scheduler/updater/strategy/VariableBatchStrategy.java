@@ -36,7 +36,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   private final Ordering<T> ordering;
   protected final ImmutableList<Integer> maxActiveGroups;
   private final boolean rollingForward;
-  private Optional<Integer> instanceModificationCount;
+  private Optional<Integer> totalModInstanceCount;
 
   private static final Logger LOG = LoggerFactory.getLogger(VariableBatchStrategy.class);
 
@@ -56,49 +56,64 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     maxActiveGroups.forEach(x -> Preconditions.checkArgument(x > 0));
 
     this.maxActiveGroups = ImmutableList.copyOf(maxActiveGroups);
-    this.instanceModificationCount = Optional.empty();
+    this.totalModInstanceCount = Optional.empty();
   }
 
-  private int determineStep(int idle) {
+  // Determine how far we're into the update based upon how many instances are waiting
+  // to be modified.
+  private int determineCurGroupSize(int remaining) {
 
-    // Calculate which step we are in by finding out how many instances we have left to update.
-    int scheduled = instanceModificationCount.get() - idle;
+    // Calculate which groupIndex we are in by finding out how many instances we have left to update
+    int modified = totalModInstanceCount.get() - remaining;
 
-    int step = 0;
-    int sum = 0;
+    int lastGroupSize = maxActiveGroups.get(maxActiveGroups.size() - 1);
 
-    LOG.info("Update progress {} changed, {} idle, and {} total to be changed.",
-        scheduled,
-        idle,
-        instanceModificationCount.get());
+    LOG.debug("Variable Batch Update progress: {} instances have been modified, "
+            + "{} instances remain unmodified, and {} overall instances to be modified.",
+        modified,
+        remaining,
+        totalModInstanceCount.get());
 
     if (rollingForward) {
-      while (sum < scheduled && step < maxActiveGroups.size()) {
-        sum += maxActiveGroups.get(step);
 
-        ++step;
+      int sum = 0;
+      for (Integer groupSize : maxActiveGroups) {
+        sum += groupSize;
+
+        if (sum > modified) {
+          return groupSize;
+        }
       }
+      // Return last step when number of instances > sum of all groups
+      return lastGroupSize;
     } else {
 
-      // Starting with the first step as we're now comparing to idle instead of scheduled
-      // to work backwards from the last step that was executed in the batch steps.
-      sum = maxActiveGroups.get(step);
+      // To perform the update in reverse, we use the number of remaining tasks left to update
+      // instead of using the number of already modified instances. In a rollback, the remaining
+      // count represents the number of instances that were already modified while rolling forward
+      // and need to be reverted.
+      int curGroupSize = remaining;
 
-      // TODO(rdelvalle): Consider if it's necessary to handle fractional steps.
-      // (i.e. halfway between step X and X+1)
-      while (sum < idle) {
-        ++step;
-
-        if (step == maxActiveGroups.size()) {
-          break;
+      for (Integer groupSize : maxActiveGroups) {
+        // This handles an in between step. i.e.: updated instances = 4, update groups = [2,3]
+        // which results in update groups 2 and 2 rolling forward at the time of failure.
+        if (curGroupSize <= groupSize) {
+          return curGroupSize;
         }
 
-        sum += maxActiveGroups.get(step);
+        curGroupSize -= groupSize;
+      }
+
+      // Handle the case where number of instances update were
+      // greater than the sum of all update groups
+      // Calculate the size of the last update group size performed while rolling forward.
+      curGroupSize = curGroupSize % lastGroupSize;
+      if (curGroupSize == 0) {
+        return lastGroupSize;
+      } else {
+        return curGroupSize;
       }
     }
-
-    // Cap at last step in case final instance count is greater than the sum of all steps.
-    return Math.min(step, maxActiveGroups.size() - 1);
   }
 
   @Override
@@ -106,12 +121,14 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
 
     // Get the size for the idle set on the first run only. This is representative of the number
     // of overall instance modifications this update will trigger.
-    if (!instanceModificationCount.isPresent()) {
-      instanceModificationCount = Optional.of(idle.size());
+    if (!totalModInstanceCount.isPresent()) {
+      totalModInstanceCount = Optional.of(idle.size());
     }
 
+    // Limit group size to the current size of the group minus the number of instances currently
+    // being modified.
     return ordering.sortedCopy(doGetNextGroup(idle, active)).stream()
-            .limit(Math.max(0, maxActiveGroups.get(determineStep(idle.size())) - active.size()))
+            .limit(Math.max(0, determineCurGroupSize(idle.size()) - active.size()))
             .collect(Collectors.toSet());
   }
 
