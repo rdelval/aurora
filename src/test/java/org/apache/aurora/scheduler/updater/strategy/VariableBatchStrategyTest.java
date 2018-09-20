@@ -84,7 +84,7 @@ public class VariableBatchStrategyTest {
   }
 
   @Test
-  public void testIncreasingSteps() {
+  public void testIncreasingGroupSizes() {
     UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING,
         ImmutableList.of(1, 2, 3),
         true);
@@ -94,7 +94,7 @@ public class VariableBatchStrategyTest {
   }
 
   @Test
-  public void testDecreasingSteps() {
+  public void testDecreasingGroupSizes() {
     UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING,
         ImmutableList.of(3, 2, 1),
         true);
@@ -104,7 +104,7 @@ public class VariableBatchStrategyTest {
   }
 
   @Test
-  public void testSeeSawSteps() {
+  public void testSeeSawGroupSizes() {
     UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING,
         ImmutableList.of(1, 3, 2, 4),
         true);
@@ -115,7 +115,7 @@ public class VariableBatchStrategyTest {
   }
 
   @Test
-  public void testMoreInstancesThanSteps() {
+  public void testMoreInstancesThanSumOfGroupSizes() {
     UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING,
         ImmutableList.of(1, 2),
         true);
@@ -144,6 +144,17 @@ public class VariableBatchStrategyTest {
         false);
     assertEquals(of(0, 1), strategy.getNextGroup(of(0, 1, 2), EMPTY));
     assertEquals(of(2), strategy.getNextGroup(of(2), EMPTY));
+  }
+
+  @Test
+  public void testRollbackOverflow() {
+    UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING,
+        ImmutableList.of(1, 2),
+        false);
+    assertEquals(of(0, 1), strategy.getNextGroup(of(0, 1, 2, 3, 4, 5, 6), EMPTY));
+    assertEquals(of(2, 3), strategy.getNextGroup(of(2, 3, 4, 5, 6), EMPTY));
+    assertEquals(of(4, 5), strategy.getNextGroup(of(4, 5, 6), EMPTY));
+    assertEquals(of(6), strategy.getNextGroup(of(6), EMPTY));
   }
 
 }
