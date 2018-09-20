@@ -1995,6 +1995,7 @@ public class SchedulerThriftInterfaceTest extends EasyMockTest {
 
   private static JobUpdateSettings buildJobUpdateSettings() {
     return new JobUpdateSettings()
+        .setUpdateGroupSize(10)
         .setUpdateStrategy(
             JobUpdateStrategy.queueStrategy(new QueueJobUpdateStrategy().setGroupSize(10)))
         .setMaxFailedInstances(2)
