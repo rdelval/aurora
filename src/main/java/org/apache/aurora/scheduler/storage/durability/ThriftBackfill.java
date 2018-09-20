@@ -169,26 +169,6 @@ public final class ThriftBackfill {
             JobUpdateStrategy.queueStrategy(
                 new QueueJobUpdateStrategy().setGroupSize(updateSettings.getUpdateGroupSize())));
       }
-    } else {
-      // Keep old job schema in case we want to revert to a lower version of Aurora that doesn't
-      // support variable update group sizes
-      if(updateSettings.getUpdateStrategy().isSetQueueStrategy()) {
-        settings.setWaitForBatchCompletion(false);
-        settings.setUpdateGroupSize(
-            updateSettings.getUpdateStrategy().getQueueStrategy().getGroupSize());
-      } else if(updateSettings.getUpdateStrategy().isSetBatchStrategy()) {
-        settings.setWaitForBatchCompletion(true);
-        settings.setUpdateGroupSize(
-            updateSettings.getUpdateStrategy().getBatchStrategy().getGroupSize());
-      } else if(updateSettings.getUpdateStrategy().isSetVarBatchStrategy()){
-        // Lossy conversion to static batch strategy.
-        settings.setWaitForBatchCompletion(true);
-        settings.setUpdateGroupSize(
-            updateSettings.getUpdateStrategy().getVarBatchStrategy().getGroupSizes().get(0));
-      } else {
-        throw new IllegalArgumentException("Update settings contain unknown update strategy.");
-      }
     }
-
   }
 }
