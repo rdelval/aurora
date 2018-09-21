@@ -796,11 +796,8 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
       return invalidRequest(NON_SERVICE_TASK);
     }
 
-    JobUpdateSettings settings = requireNonNull(mutableRequest.getSettings());
-
-    // Keep old job schema in case we want to revert to a lower version of Aurora that doesn't
-    // support variable update group sizes
     int totalInstancesFromGroups;
+    JobUpdateSettings settings = requireNonNull(mutableRequest.getSettings());
 
     // Gracefully handle a client sending an update with an older thrift schema
     // TODO(rdelvalle): Remove after version 0.22.0 ships
@@ -816,6 +813,8 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
       }
     }
 
+    // Keep old job schema in case we want to revert to a lower version of Aurora that doesn't
+    // support variable update group sizes
     if (settings.getUpdateStrategy().isSetQueueStrategy()) {
       totalInstancesFromGroups = settings.getUpdateStrategy().getQueueStrategy().getGroupSize();
       settings.setWaitForBatchCompletion(false);
