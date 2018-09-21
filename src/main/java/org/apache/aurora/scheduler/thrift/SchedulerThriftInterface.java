@@ -801,17 +801,7 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
 
     // Gracefully handle a client sending an update with an older thrift schema
     // TODO(rdelvalle): Remove after version 0.22.0 ships
-    if (!settings.isSetUpdateStrategy()) {
-      if (settings.isWaitForBatchCompletion()) {
-        settings.setUpdateStrategy(
-            JobUpdateStrategy.batchStrategy(
-                new BatchJobUpdateStrategy().setGroupSize(settings.getUpdateGroupSize())));
-      } else {
-        settings.setUpdateStrategy(
-            JobUpdateStrategy.queueStrategy(
-                new QueueJobUpdateStrategy().setGroupSize(settings.getUpdateGroupSize())));
-      }
-    }
+    ThriftBackfill.backfillUpdateStrategy(settings);
 
     // Keep old job schema in case we want to revert to a lower version of Aurora that doesn't
     // support variable update group sizes

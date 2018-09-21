@@ -155,7 +155,7 @@ public final class ThriftBackfill {
     return IJobUpdate.build(update);
   }
 
-  private void backfillUpdateStrategy(JobUpdateSettings settings) {
+  public static void backfillUpdateStrategy(JobUpdateSettings settings) {
     IJobUpdateSettings updateSettings = IJobUpdateSettings.build(settings);
 
     // Convert old job update schema to have an update strategy
