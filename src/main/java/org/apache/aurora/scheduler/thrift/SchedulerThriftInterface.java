@@ -38,7 +38,6 @@ import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 
 import org.apache.aurora.common.stats.StatsProvider;
-import org.apache.aurora.gen.BatchJobUpdateStrategy;
 import org.apache.aurora.gen.DrainHostsResult;
 import org.apache.aurora.gen.EndMaintenanceResult;
 import org.apache.aurora.gen.ExplicitReconciliationSettings;
@@ -54,13 +53,11 @@ import org.apache.aurora.gen.JobUpdatePulseStatus;
 import org.apache.aurora.gen.JobUpdateQuery;
 import org.apache.aurora.gen.JobUpdateRequest;
 import org.apache.aurora.gen.JobUpdateSettings;
-import org.apache.aurora.gen.JobUpdateStrategy;
 import org.apache.aurora.gen.JobUpdateSummary;
 import org.apache.aurora.gen.ListBackupsResult;
 import org.apache.aurora.gen.MaintenanceStatusResult;
 import org.apache.aurora.gen.PulseJobUpdateResult;
 import org.apache.aurora.gen.QueryRecoveryResult;
-import org.apache.aurora.gen.QueueJobUpdateStrategy;
 import org.apache.aurora.gen.ReadOnlyScheduler;
 import org.apache.aurora.gen.ResourceAggregate;
 import org.apache.aurora.gen.Response;
@@ -807,18 +804,10 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
     // support variable update group sizes
     if (settings.getUpdateStrategy().isSetQueueStrategy()) {
       totalInstancesFromGroups = settings.getUpdateStrategy().getQueueStrategy().getGroupSize();
-      settings.setWaitForBatchCompletion(false);
-      settings.setUpdateGroupSize(settings.getUpdateStrategy().getQueueStrategy().getGroupSize());
     } else if (settings.getUpdateStrategy().isSetBatchStrategy()) {
       totalInstancesFromGroups = settings.getUpdateStrategy().getBatchStrategy().getGroupSize();
-      settings.setWaitForBatchCompletion(true);
-      settings.setUpdateGroupSize(settings.getUpdateStrategy().getBatchStrategy().getGroupSize());
     } else if (settings.getUpdateStrategy().isSetVarBatchStrategy()) {
       VariableBatchJobUpdateStrategy strategy = settings.getUpdateStrategy().getVarBatchStrategy();
-      settings.setWaitForBatchCompletion(true);
-      // Setting this value to allow graceful rollback to version 0.21.0
-      // TODO(rdelvalle): Remove compatibility settings once version 0.22.0 ships
-      settings.setUpdateGroupSize(1); // Necessary because we haven't validated the values sent
 
       if (strategy.getGroupSizes().stream().anyMatch(x -> x <= 0)) {
         return invalidRequest(INVALID_GROUP_SIZE);
