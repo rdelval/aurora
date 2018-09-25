@@ -194,7 +194,13 @@ class JobUpdateControllerImpl implements JobUpdateController {
       IJobKey job = summary.getKey().getJob();
 
       // Validate the update configuration by making sure we can create an updater for it.
-      updateFactory.newUpdate(update.getInstructions(), true);
+      updateFactory.newUpdate(update.getInstructions(), true, ()-> {
+        try {
+          this.pause(summary.getKey(), new AuditData("System", Optional.of("Autopause")));
+        } catch (UpdateStateException u) {
+          LOG.error("Auto pause for update {} failed", summary.getKey());
+        }
+      });
 
       if (instructions.getInitialState().isEmpty() && !instructions.isSetDesiredState()) {
         throw new IllegalArgumentException("Update instruction is a no-op.");
@@ -225,6 +231,8 @@ class JobUpdateControllerImpl implements JobUpdateController {
         status = ROLL_FORWARD_AWAITING_PULSE;
         pulseHandler.initializePulseState(update, status, 0L);
       }
+
+      summary.getKey();
 
       recordAndChangeJobUpdateStatus(
           storeProvider,
@@ -547,8 +555,13 @@ class JobUpdateControllerImpl implements JobUpdateController {
       IJobUpdate jobUpdate = updateStore.fetchJobUpdate(key).get().getUpdate();
       UpdateFactory.Update update;
       try {
-        update = updateFactory.newUpdate(jobUpdate.getInstructions(), action == ROLL_FORWARD);
-      } catch (RuntimeException e) {
+        update = updateFactory.newUpdate(jobUpdate.getInstructions(), action == ROLL_FORWARD, ()-> {
+          try {
+            this.pause(key, new AuditData("System", Optional.of("Autopause")));
+          } catch (UpdateStateException u) {
+            LOG.error("Auto pause for update {} failed", key);
+          }
+        });      } catch (RuntimeException e) {
         LOG.warn("Uncaught exception: " + e, e);
         changeJobUpdateStatus(
             storeProvider,

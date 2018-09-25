@@ -25,6 +25,9 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
 
+import com.google.inject.Inject;
+import org.apache.aurora.scheduler.storage.entities.IJobUpdateKey;
+import org.apache.aurora.scheduler.updater.JobUpdateController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +43,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   protected final ImmutableList<Integer> groupSizes;
   private final boolean rollingForward;
   private Optional<Integer> totalModInstanceCount;
+  private Runnable pause;
 
   private static final Logger LOG = LoggerFactory.getLogger(VariableBatchStrategy.class);
 
@@ -52,7 +56,8 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   public VariableBatchStrategy(
       Ordering<T> ordering,
       List<Integer> maxActiveGroups,
-      boolean rollingForward) {
+      boolean rollingForward,
+      Runnable pause) {
 
     this.ordering = Objects.requireNonNull(ordering);
     this.rollingForward = rollingForward;
@@ -61,6 +66,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
 
     this.groupSizes = ImmutableList.copyOf(maxActiveGroups);
     this.totalModInstanceCount = Optional.empty();
+    this.pause = pause;
   }
 
   // Determine how far we're into the update based upon how many instances are waiting
@@ -129,6 +135,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     return ordering.sortedCopy(doGetNextGroup(idle, active)).stream()
             .limit(Math.max(0, determineCurGroupSize(idle.size()) - active.size()))
             .collect(Collectors.toSet());
+
   }
 
   /**
@@ -140,6 +147,12 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
    * @return all idle instances to start updating.
    */
   Set<T> doGetNextGroup(Set<T> idle, Set<T> active) {
-    return active.isEmpty() ? idle : ImmutableSet.of();
+    if (active.isEmpty()) {
+      LOG.info("Idle size: {} Active size: {}", idle.size(), active.size());
+        this.pause.run();
+        return idle;
+    } else {
+      return ImmutableSet.of();
+    }
   }
 }
