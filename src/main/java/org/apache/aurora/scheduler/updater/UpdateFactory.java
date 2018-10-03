@@ -67,6 +67,7 @@ interface UpdateFactory {
 
   class UpdateFactoryImpl implements UpdateFactory {
     private final Clock clock;
+    private final String GROUP_SIZES_INVALID = "Update group size(s) must be positive.";
 
     @Inject
     UpdateFactoryImpl(Clock clock) {
@@ -81,6 +82,25 @@ interface UpdateFactory {
       checkArgument(
           settings.getMinWaitInInstanceRunningMs() >= 0,
           "Min wait in running must be non-negative.");
+
+      if (settings.getUpdateStrategy().isSetBatchStrategy()) {
+        checkArgument(
+            settings.getUpdateStrategy().getBatchStrategy().getGroupSize() > 0,
+            GROUP_SIZES_INVALID);
+      } else if (settings.getUpdateStrategy().isSetVarBatchStrategy()) {
+        checkArgument(
+            settings.getUpdateStrategy().
+                getVarBatchStrategy().
+                getGroupSizes().
+                stream().
+                reduce(0, Integer::sum) > 0,
+            GROUP_SIZES_INVALID);
+
+      } else {
+        checkArgument(
+            settings.getUpdateStrategy().getQueueStrategy().getGroupSize() > 0,
+            GROUP_SIZES_INVALID);
+      }
 
       Set<Integer> currentInstances = expandInstanceIds(instructions.getInitialState());
       Set<Integer> desiredInstances = instructions.isSetDesiredState()
