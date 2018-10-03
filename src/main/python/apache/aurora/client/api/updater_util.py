@@ -95,6 +95,13 @@ class UpdaterConfig(object):
       else:
         self.update_strategy = update_strategy(
           PystachioQueueUpdateStrategy(batch_size=self.batch_size))
+    else:
+      unwrapped = self.update_strategy.unwrap()
+      if (isinstance(unwrapped, PystachioQueueUpdateStrategy) or
+          isinstance(unwrapped, PystachioBatchUpdateStrategy)):
+        self.batch_size = self.update_strategy.groupSize
+      elif isinstance(unwrapped, PystachioBatchUpdateStrategy):
+        self.batch_size = self.update_strategy.groupSizes[0]
 
     return JobUpdateSettings(
         updateGroupSize=self.batch_size,
