@@ -129,32 +129,32 @@ public class VariableBatchStrategyTest {
 
   @Test
   public void testRollback() {
-    UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING,
+    UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING.reverse(),
         ImmutableList.of(1, 2, 3),
         false);
-    assertEquals(of(0, 1, 2), strategy.getNextGroup(of(0, 1, 2, 3, 4, 5), EMPTY));
-    assertEquals(of(3, 4), strategy.getNextGroup(of(3, 4, 5), EMPTY));
-    assertEquals(of(5), strategy.getNextGroup(of(5), EMPTY));
+    assertEquals(of(3, 4, 5), strategy.getNextGroup(of(0, 1, 2, 3, 4, 5), EMPTY));
+    assertEquals(of(1, 2), strategy.getNextGroup(of(0, 1, 2), EMPTY));
+    assertEquals(of(0), strategy.getNextGroup(of(0), EMPTY));
   }
 
   @Test
   public void testRollbackMidWay() {
-    UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING,
+    UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING.reverse(),
         ImmutableList.of(1, 2, 3),
         false);
-    assertEquals(of(0, 1), strategy.getNextGroup(of(0, 1, 2), EMPTY));
-    assertEquals(of(2), strategy.getNextGroup(of(2), EMPTY));
+    assertEquals(of(1, 2), strategy.getNextGroup(of(0, 1, 2), EMPTY));
+    assertEquals(of(0), strategy.getNextGroup(of(0), EMPTY));
   }
 
   @Test
   public void testRollbackOverflow() {
-    UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING,
+    UpdateStrategy<Integer> strategy = new VariableBatchStrategy<>(ORDERING.reverse(),
         ImmutableList.of(1, 2),
         false);
-    assertEquals(of(0, 1), strategy.getNextGroup(of(0, 1, 2, 3, 4, 5, 6), EMPTY));
-    assertEquals(of(2, 3), strategy.getNextGroup(of(2, 3, 4, 5, 6), EMPTY));
-    assertEquals(of(4, 5), strategy.getNextGroup(of(4, 5, 6), EMPTY));
-    assertEquals(of(6), strategy.getNextGroup(of(6), EMPTY));
+    assertEquals(of(5, 6), strategy.getNextGroup(of(0, 1, 2, 3, 4, 5, 6), EMPTY));
+    assertEquals(of(4, 3), strategy.getNextGroup(of(0, 1, 2, 3, 4), EMPTY));
+    assertEquals(of(2, 1), strategy.getNextGroup(of(0, 1, 2), EMPTY));
+    assertEquals(of(0), strategy.getNextGroup(of(0), EMPTY));
   }
 
 }
