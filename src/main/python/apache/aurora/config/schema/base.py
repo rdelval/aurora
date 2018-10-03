@@ -46,9 +46,9 @@ class UpdateConfig(Struct):
   wait_for_batch_completion   = Default(Boolean, False)
   pulse_interval_secs         = Integer
   sla_aware                   = Default(Boolean, False)
-  update_strategy = Choice([QueueUpdateStrategy,
-                            BatchUpdateStrategy,
-                            VariableBatchUpdateStrategy])
+  update_strategy             = Choice([QueueUpdateStrategy,
+                                        BatchUpdateStrategy,
+                                        VariableBatchUpdateStrategy])
 
 
 class HttpHealthChecker(Struct):

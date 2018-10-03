@@ -97,7 +97,7 @@ class TestUpdaterUtil(unittest.TestCase):
   def test_to_thrift_update_settings_strategy(self):
 
     """Test to_thrift produces an expected thrift update settings configuration
-       from a PyStachio update object.
+       from a Pystachio update object.
     """
 
     update_strategy = Choice([PystachioQueueUpdateStrategy,
@@ -123,7 +123,7 @@ class TestUpdaterUtil(unittest.TestCase):
   def test_to_thrift_update_settings_no_strategy_queue(self):
 
     """Test to_thrift produces an expected thrift update settings configuration
-       from a PyStachio update object that doesn't include an update strategy.
+       from a Pystachio update object that doesn't include an update strategy.
 
        The configuration in this test should be converted to a
        QueueJobUpdateStrategy.
@@ -144,7 +144,7 @@ class TestUpdaterUtil(unittest.TestCase):
   def test_to_thrift_update_settings_no_strategy_batch(self):
 
     """Test to_thrift produces an expected thrift update settings configuration
-       from a PyStachio update object that doesn't include an update strategy.
+       from a Pystachio update object that doesn't include an update strategy.
 
        The configuration in this test should be converted to a
        BatchJobUpdateStrategy.

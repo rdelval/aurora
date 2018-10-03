@@ -13,6 +13,7 @@
  */
 package org.apache.aurora.scheduler.updater.strategy;
 
+import com.google.common.collect.Iterables;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -28,13 +29,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A strategy that limits the number of instances selected by the subclass using variable steps.
+ * An update strategy that will only add more work when the current active group is empty.
+ * Size of the groups are picked from the supplied list.
+ * Last element is picked multiple times if necessary.
  *
  * @param <T> Instance type.
  */
 public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStrategy<T> {
   private final Ordering<T> ordering;
-  protected final ImmutableList<Integer> maxActiveGroups;
+  protected final ImmutableList<Integer> groupSizes;
   private final boolean rollingForward;
   private Optional<Integer> totalModInstanceCount;
 
@@ -46,7 +49,8 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
    * @param maxActiveGroups  List of Maximum group sizes. Each group size represents a step.
    * {@link #getNextGroup(Set, Set)}.
    */
-  public VariableBatchStrategy(Ordering<T> ordering,
+  public VariableBatchStrategy(
+      Ordering<T> ordering,
       List<Integer> maxActiveGroups,
       boolean rollingForward) {
 
@@ -55,18 +59,16 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
 
     maxActiveGroups.forEach(x -> Preconditions.checkArgument(x > 0));
 
-    this.maxActiveGroups = ImmutableList.copyOf(maxActiveGroups);
+    this.groupSizes = ImmutableList.copyOf(maxActiveGroups);
     this.totalModInstanceCount = Optional.empty();
   }
 
   // Determine how far we're into the update based upon how many instances are waiting
   // to be modified.
   private int determineCurGroupSize(int remaining) {
-
     // Calculate which groupIndex we are in by finding out how many instances we have left to update
     int modified = totalModInstanceCount.get() - remaining;
-
-    int lastGroupSize = maxActiveGroups.get(maxActiveGroups.size() - 1);
+    int finalGroupSize = Iterables.getLast(groupSizes);
 
     LOG.debug("Variable Batch Update progress: {} instances have been modified, "
             + "{} instances remain unmodified, and {} overall instances to be modified.",
@@ -75,9 +77,8 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
         totalModInstanceCount.get());
 
     if (rollingForward) {
-
       int sum = 0;
-      for (Integer groupSize : maxActiveGroups) {
+      for (Integer groupSize : groupSizes) {
         sum += groupSize;
 
         if (sum > modified) {
@@ -85,16 +86,15 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
         }
       }
       // Return last step when number of instances > sum of all groups
-      return lastGroupSize;
+      return finalGroupSize;
     } else {
-
       // To perform the update in reverse, we use the number of remaining tasks left to update
       // instead of using the number of already modified instances. In a rollback, the remaining
       // count represents the number of instances that were already modified while rolling forward
       // and need to be reverted.
       int curGroupSize = remaining;
 
-      for (Integer groupSize : maxActiveGroups) {
+      for (Integer groupSize : groupSizes) {
         // This handles an in between step. i.e.: updated instances = 4, update groups = [2,3]
         // which results in update groups 2 and 2 rolling forward at the time of failure.
         if (curGroupSize <= groupSize) {
@@ -107,9 +107,9 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
       // Handle the case where number of instances update were
       // greater than the sum of all update groups
       // Calculate the size of the last update group size performed while rolling forward.
-      curGroupSize = curGroupSize % lastGroupSize;
+      curGroupSize = curGroupSize % finalGroupSize;
       if (curGroupSize == 0) {
-        return lastGroupSize;
+        return finalGroupSize;
       } else {
         return curGroupSize;
       }
@@ -118,7 +118,6 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
 
   @Override
   public final Set<T> getNextGroup(Set<T> idle, Set<T> active) {
-
     // Get the size for the idle set on the first run only. This is representative of the number
     // of overall instance modifications this update will trigger.
     if (!totalModInstanceCount.isPresent()) {
@@ -135,18 +134,12 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   /**
    * Return a list of instances to be updated.
    * Returns an empty list if the current active group has not completed.
-   * If the result is larger than the current group size in {@link #maxActiveGroups},
-   * it will be truncated.
    *
    * @param idle Idle instances, candidate for being updated.
    * @param active Instances currently being updated.
-   * @return A subset of {@code idle}, instances to start updating.
+   * @return all idle instances to start updating.
    */
   Set<T> doGetNextGroup(Set<T> idle, Set<T> active) {
-    if (active.isEmpty()) {
-      return idle;
-    } else {
-      return ImmutableSet.of();
-    }
+    return active.isEmpty() ? idle : ImmutableSet.of();
   }
 }

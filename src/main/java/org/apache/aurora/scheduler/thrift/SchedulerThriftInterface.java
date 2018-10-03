@@ -1051,6 +1051,7 @@ class SchedulerThriftInterface implements AnnotatedAuroraAdmin {
   static String noCronScheduleMessage(IJobKey jobKey) {
     return String.format("Job %s has no cron schedule", JobKeys.canonicalString(jobKey));
   }
+
   @VisibleForTesting
   static String notScheduledCronMessage(IJobKey jobKey) {
     return String.format("Job %s is not scheduled with cron", JobKeys.canonicalString(jobKey));
