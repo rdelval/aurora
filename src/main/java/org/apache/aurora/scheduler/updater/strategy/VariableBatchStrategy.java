@@ -13,7 +13,6 @@
  */
 package org.apache.aurora.scheduler.updater.strategy;
 
-import com.google.common.collect.Iterables;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -23,6 +22,7 @@ import java.util.stream.Collectors;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
 
 import org.slf4j.Logger;

@@ -67,7 +67,6 @@ interface UpdateFactory {
 
   class UpdateFactoryImpl implements UpdateFactory {
     private final Clock clock;
-    private final String GROUP_SIZES_INVALID = "Update group size(s) must be positive.";
 
     @Inject
     UpdateFactoryImpl(Clock clock) {
@@ -174,6 +173,8 @@ interface UpdateFactory {
     static Set<Integer> expandInstanceIds(Set<IInstanceTaskConfig> instanceGroups) {
       return Updates.getInstanceIds(instanceGroups).asSet(DiscreteDomain.integers());
     }
+
+    static final String GROUP_SIZES_INVALID = "Update group size(s) must be positive.";
   }
 
   /**
