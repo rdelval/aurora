@@ -977,6 +977,7 @@ test_partition_awareness "${TEST_PARTITION_AWARENESS_ARGS[@]}"
 test_version
 test_http_example "${TEST_JOB_ARGS[@]}"
 test_http_example "${TEST_JOB_WATCH_SECS_ARGS[@]}"
+# TODO(rdelvalle): Add verification that each batch has the right number of active instances.
 test_http_example "${TEST_JOB_VAR_BATCH_UPDATE_ARGS[@]}"
 test_health_check
 
