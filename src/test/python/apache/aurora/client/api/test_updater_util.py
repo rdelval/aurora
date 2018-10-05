@@ -176,8 +176,8 @@ class TestUpdaterUtil(unittest.TestCase):
                                          batch_size=3))))
 
     assert ('Ambiguous update configuration. Cannot combine '
-            'update strategy with batch size. Please set batch'
-            'size inside of update strategy instead.' in e.value.message)
+            'wait_batch_completion with an '
+            'explicit update strategy.' in e.value.message)
 
   def test_batch_size_and_update_strategy(self):
 
@@ -190,6 +190,7 @@ class TestUpdaterUtil(unittest.TestCase):
                                  update_strategy=self.UPDATE_STRATEGIES(
                                      PystachioBatchUpdateStrategy(
                                          batch_size=3))))
+
     assert ('Ambiguous update configuration. Cannot combine '
-            'wait_batch_completion with an '
-            'explicit update strategy.' in e.value.message)
+            'update strategy with batch size. Please set batch'
+            'size inside of update strategy instead.' in e.value.message)
