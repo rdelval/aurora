@@ -54,6 +54,14 @@ class UpdaterConfig(object):
             self.pulse_interval_secs < self.MIN_PULSE_INTERVAL_SECONDS):
       raise ValueError('Pulse interval seconds must be at least %s seconds.'
                       % self.MIN_PULSE_INTERVAL_SECONDS)
+    if self.wait_for_batch_completion and self.update_strategy is not Empty:
+      raise ValueError('Ambiguous update configuration. Cannot combine '
+                       'wait_batch_completion with an '
+                       'explicit update strategy.')
+    if self.batch_size > 1 and self.update_strategy is not Empty:
+      raise ValueError('Ambiguous update configuration. Cannot combine '
+                       'update strategy with batch size. Please set batch'
+                       'size inside of update strategy instead.')
 
   @classmethod
   def instances_to_ranges(cls, instances):

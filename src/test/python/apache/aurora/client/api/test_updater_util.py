@@ -48,6 +48,10 @@ class TestUpdaterUtil(unittest.TestCase):
     updateGroupSize=1,
     maxFailedInstances=0)
 
+  UPDATE_STRATEGIES = Choice([PystachioQueueUpdateStrategy,
+                            PystachioBatchUpdateStrategy,
+                            PystachioVariableBatchUpdateStrategy])
+
   def test_multiple_ranges(self):
     """Test multiple ranges."""
     ranges = [repr(e) for e in UpdaterConfig.instances_to_ranges([1, 2, 3, 5, 7, 8])]
@@ -100,13 +104,9 @@ class TestUpdaterUtil(unittest.TestCase):
        from a Pystachio update object.
     """
 
-    update_strategy = Choice([PystachioQueueUpdateStrategy,
-                              PystachioBatchUpdateStrategy,
-                              PystachioVariableBatchUpdateStrategy])
-
     config = UpdaterConfig(
       UpdateConfig(
-        update_strategy=update_strategy(
+        update_strategy=self.UPDATE_STRATEGIES(
           PystachioVariableBatchUpdateStrategy(batch_sizes=[1, 2, 3, 4]))))
 
     thrift_update_config = config.to_thrift_update_settings()
@@ -162,3 +162,34 @@ class TestUpdaterUtil(unittest.TestCase):
     update_settings.waitForBatchCompletion = True
 
     assert thrift_update_config == update_settings
+
+  def test_wait_for_batch_completion_and_update_strategy(self):
+
+    """Test setting wait_for_batch_completion along with an update strategy.
+       This combination should result in a fast fail.
+    """
+
+    with raises(ValueError) as e:
+      UpdaterConfig(UpdateConfig(wait_for_batch_completion=True,
+                                 update_strategy=self.UPDATE_STRATEGIES(
+                                     PystachioBatchUpdateStrategy(
+                                         batch_size=3))))
+
+    assert ('Ambiguous update configuration. Cannot combine '
+            'update strategy with batch size. Please set batch'
+            'size inside of update strategy instead.' in e.value.message)
+
+  def test_batch_size_and_update_strategy(self):
+
+    """Test setting a batch size along with an update strategy.
+       This combination should result in a fast fail.
+    """
+
+    with raises(ValueError) as e:
+      UpdaterConfig(UpdateConfig(batch_size=2,
+                                 update_strategy=self.UPDATE_STRATEGIES(
+                                     PystachioBatchUpdateStrategy(
+                                         batch_size=3))))
+    assert ('Ambiguous update configuration. Cannot combine'
+            'wait_batch_completion with an '
+            'explicit update strategy.' in e.value.message)
