@@ -190,6 +190,6 @@ class TestUpdaterUtil(unittest.TestCase):
                                  update_strategy=self.UPDATE_STRATEGIES(
                                      PystachioBatchUpdateStrategy(
                                          batch_size=3))))
-    assert ('Ambiguous update configuration. Cannot combine'
+    assert ('Ambiguous update configuration. Cannot combine '
             'wait_batch_completion with an '
             'explicit update strategy.' in e.value.message)
