@@ -230,8 +230,6 @@ public class SlaManager extends AbstractIdleService {
     ).size();
 
     if (skipSla(task, numActive)) {
-      LOG.info("Skip SLA for {} because it is not production or does not have enough instances.",
-          Tasks.id(task));
       return true;
     }
 
@@ -445,10 +443,15 @@ public class SlaManager extends AbstractIdleService {
   }
 
   private boolean skipSla(IScheduledTask task, long numActive) {
-    if (!tierManager.getTier(task.getAssignedTask().getTask()).isPreemptible()
-        && !tierManager.getTier(task.getAssignedTask().getTask()).isRevocable()) {
-      return numActive < minRequiredInstances;
+    if (tierManager.getTier(task.getAssignedTask().getTask()).isProduction()) {
+      if (numActive < minRequiredInstances) {
+        LOG.info("Skip SLA for {} because it does not have enough instances.", Tasks.id(task));
+        return true;
+      }
+      return false;
     }
+
+    LOG.info("Skip SLA for {} because it is not being run in a production tier.", Tasks.id(task));
     return true;
   }
 
