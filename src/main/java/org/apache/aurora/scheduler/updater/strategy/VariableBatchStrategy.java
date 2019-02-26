@@ -25,9 +25,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
 
-import com.google.inject.Inject;
-import org.apache.aurora.scheduler.storage.entities.IJobUpdateKey;
-import org.apache.aurora.scheduler.updater.JobUpdateController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,8 +40,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   protected final ImmutableList<Integer> groupSizes;
   private final boolean rollingForward;
   private Optional<Integer> totalModInstanceCount;
-  private Runnable pause;
-  private boolean paused;
+  private boolean updatePaused;
 
   private static final Logger LOG = LoggerFactory.getLogger(VariableBatchStrategy.class);
 
@@ -66,8 +62,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
 
     this.groupSizes = ImmutableList.copyOf(maxActiveGroups);
     this.totalModInstanceCount = Optional.empty();
-    this.pause = pause;
-    this.paused = false;
+    this.updatePaused = false;
   }
 
   // Determine how far we're into the update based upon how many instances are waiting
@@ -123,8 +118,8 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     }
   }
 
-  public void paused(boolean pause) {
-    this.paused = pause;
+  public void setPaused(boolean pause) {
+    this.updatePaused = pause;
   }
 
   @Override
@@ -136,20 +131,21 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
       totalModInstanceCount = Optional.of(idle.size());
     }
 
-    if (this.paused) {
+    if (this.updatePaused) {
       return ImmutableSet.of();
     }
 
     // Limit group size to the current size of the group minus the number of instances currently
     // being modified.
     return ordering.sortedCopy(doGetNextGroup(idle, active)).stream()
-            .limit(Math.max(0, determineCurGroupSize(idle.size(), totalModInstanceCount.get()) - active.size()))
+            .limit(Math.max(0,
+                determineCurGroupSize(idle.size(), totalModInstanceCount.get()) - active.size()))
             .collect(Collectors.toSet());
   }
 
   public final boolean pause(int successCount, int totalInstances, long pauseCount) {
 
-    if (this.paused) {
+    if (this.updatePaused) {
       return true;
     }
 
@@ -157,7 +153,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     int groupNumber = 0;
     int modified = successCount;
 
-    for (int x=0; x < groupSizes.size(); ++x) {
+    for (int x = 0; x < groupSizes.size(); ++x) {
       sum += groupSizes.get(x);
       groupNumber = x;
 
@@ -182,9 +178,10 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
       ++groupNumber;
     }
 
+    // TODO(rdelvalle): Get rid of this before final cut.
     LOG.info("Group number {} Pause Count {}", groupNumber, pauseCount);
 
-    if (remaining % finalGroupSize == 0){
+    if (remaining % finalGroupSize == 0) {
       return groupNumber == pauseCount;
     } else {
       return false;
@@ -201,8 +198,9 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
    */
   Set<T> doGetNextGroup(Set<T> idle, Set<T> active) {
     if (active.isEmpty()) {
+      // TODO(rdelvalle): Get rid of this before final cut.
       LOG.info("Idle size: {} Active size: {}", idle.size(), active.size());
-        return idle;
+      return idle;
     } else {
       return ImmutableSet.of();
     }

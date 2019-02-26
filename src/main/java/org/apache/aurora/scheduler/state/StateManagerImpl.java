@@ -52,7 +52,6 @@ import org.apache.aurora.scheduler.state.SideEffect.Action;
 import org.apache.aurora.scheduler.storage.Storage.MutableStoreProvider;
 import org.apache.aurora.scheduler.storage.TaskStore;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
-import org.apache.aurora.scheduler.storage.entities.IInstanceKey;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
 import org.apache.mesos.v1.Protos.AgentID;
@@ -151,18 +150,13 @@ public class StateManagerImpl implements StateManager {
     requireNonNull(newTask);
     requireNonNull(curTask);
 
-    // Done outside the write transaction to minimize the work done inside a transaction.
-    Set<IScheduledTask> scheduledTasks = instanceIds.stream()
-        .map(instanceId -> createTask(instanceId, newTask))
-        .collect(Collectors.toSet());
-
     Collection<IScheduledTask> activeInstances = storeProvider.getTaskStore().fetchTasks(
         Query.instanceScoped(curTask.getAssignedTask().getTask().getJob(), instanceIds).active());
 
     if (activeInstances.size() != instanceIds.size()) {
-      throw new IllegalArgumentException("Number of instances to restart does not match number of active tasks.");
+      throw new IllegalArgumentException("Number of instances to restart does "
+          + "not match number of active tasks.");
     }
-
 
     for (IScheduledTask scheduledTask : activeInstances) {
       // Change configuration of task

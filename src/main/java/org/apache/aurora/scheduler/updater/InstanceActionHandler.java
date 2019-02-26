@@ -13,7 +13,6 @@
  */
 package org.apache.aurora.scheduler.updater;
 
-import com.google.common.collect.ImmutableList;
 import java.util.Optional;
 
 import com.google.common.collect.ImmutableSet;
@@ -144,7 +143,6 @@ interface InstanceActionHandler {
           task.get(),
           replacement,
           ImmutableSet.of(task.get().getAssignedTask().getInstanceId()));
-
 
       return Optional.empty();
     }

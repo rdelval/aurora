@@ -32,12 +32,10 @@ import static java.util.Objects.requireNonNull;
 import static org.apache.aurora.gen.ScheduleStatus.KILLING;
 import static org.apache.aurora.gen.ScheduleStatus.RUNNING;
 import static org.apache.aurora.scheduler.base.Tasks.isKillable;
-import static org.apache.aurora.scheduler.resources.ResourceManager.bagFromResources;
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.EVALUATE_AFTER_MIN_RUNNING_MS;
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.EVALUATE_ON_STATE_CHANGE;
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.FAILED_TERMINATED;
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.KILL_TASK_AND_EVALUATE_ON_STATE_CHANGE;
-import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.KILL_TASK_WITH_RESERVATION_AND_EVALUATE_ON_STATE_CHANGE;
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.REPLACE_TASK;
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.REPLACE_TASK_AND_EVALUATE_ON_STATE_CHANGE;
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.SUCCEEDED;
@@ -117,15 +115,6 @@ class InstanceUpdater implements StateEvaluator<Optional<IScheduledTask>> {
     LOG.info("Observed updated task failure.");
     observedFailures++;
     return observedFailures > toleratedFailures;
-  }
-
-  private boolean resourceFits(ITaskConfig desired, ITaskConfig existing) {
-    return bagFromResources(existing.getResources())
-        .greaterThanOrEqualTo(bagFromResources(desired.getResources()));
-  }
-
-  private boolean constraintsMatch(ITaskConfig desired, ITaskConfig existing) {
-    return desired.getConstraints().equals(existing.getConstraints());
   }
 
   private Result handleActualAndDesiredPresent(IScheduledTask actualState) {

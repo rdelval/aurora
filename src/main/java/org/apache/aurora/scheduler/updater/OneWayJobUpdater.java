@@ -197,11 +197,18 @@ class OneWayJobUpdater<K, T> {
 
   public boolean autoPause(long pauseCount) {
     if (strategy instanceof VariableBatchStrategy) {
-      LOG.info("Currently {} working {} succeeded instances", filterByStatus(instances, WORKING).size(), filterByStatus(instances, SUCCEEDED).size());
-      this.paused = ((VariableBatchStrategy) strategy).pause(filterByStatus(instances, WORKING).size() + filterByStatus(instances, SUCCEEDED).size(), instances.size(), pauseCount);
+      // TODO(rdelvalle): Get rid of this log message before final cut.
+      LOG.info("Currently {} working {} succeeded instances",
+          filterByStatus(instances, WORKING).size(),
+          filterByStatus(instances, SUCCEEDED).size());
+
+      this.paused = ((VariableBatchStrategy) strategy).pause(
+          filterByStatus(instances, WORKING).size() + filterByStatus(instances, SUCCEEDED).size(),
+          instances.size(),
+          pauseCount);
 
       if (this.paused) {
-        ((VariableBatchStrategy) strategy).paused(true);
+        ((VariableBatchStrategy) strategy).setPaused(true);
       }
     } else {
       this.paused = false;
@@ -209,7 +216,6 @@ class OneWayJobUpdater<K, T> {
 
     return this.paused;
   }
-
 
   private OneWayStatus computeJobUpdateStatus() {
     Set<K> idle = filterByStatus(instances, IDLE);
@@ -262,7 +268,6 @@ class OneWayJobUpdater<K, T> {
         stateMachine.transition(status);
         statusChanges.add(status);
       }
-
 
       return new SideEffect(result.getAction(), statusChanges.build(), result.getFailure());
     }

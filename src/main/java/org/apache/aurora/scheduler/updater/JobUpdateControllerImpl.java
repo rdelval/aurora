@@ -45,7 +45,6 @@ import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.stats.StatsProvider;
 import org.apache.aurora.common.util.Clock;
 import org.apache.aurora.gen.JobInstanceUpdateEvent;
-import org.apache.aurora.gen.JobUpdate;
 import org.apache.aurora.gen.JobUpdateAction;
 import org.apache.aurora.gen.JobUpdateEvent;
 import org.apache.aurora.gen.JobUpdatePulseStatus;
@@ -412,7 +411,12 @@ class JobUpdateControllerImpl implements JobUpdateController {
       IJobKey job = instance.getJobKey();
       UpdateFactory.Update update = updates.get(job);
       if (update != null) {
-        LOG.info("Changing task {} State {} " , InstanceKeys.toString(instance), state.get().getStatus());
+
+        // TODO (rdelvalle): Get rid of logging message before final cut
+        LOG.info("Changing task {} State {} ",
+            InstanceKeys.toString(instance),
+            state.get().getStatus());
+
         if (update.getUpdater().containsInstance(instance.getInstanceId())) {
           // We check to see if the state change is specified, and if it is, ensure that the new
           // state matches the current state. We do this because events are processed asynchronously
@@ -498,7 +502,11 @@ class JobUpdateControllerImpl implements JobUpdateController {
       IJobUpdateSummary updateSummary,
       JobUpdateEvent event) throws UpdateStateException {
 
-    LOG.info("Update Status {}, Event Status {}", updateSummary.getState().getStatus(),event.getStatus());
+    // TODO(rdelvalle): Get rid of this debugging line before final cut.
+    LOG.info("Update Status {}, Event Status {}",
+        updateSummary.getState().getStatus(),
+        event.getStatus());
+
     if (updateSummary.getState().getStatus() == event.getStatus()) {
       return;
     }
@@ -642,7 +650,6 @@ class JobUpdateControllerImpl implements JobUpdateController {
           newEvent(pausedStatus).setMessage("Auto paused"));
     }
 
-
     InstanceStateProvider<Integer, Optional<IScheduledTask>> stateProvider =
         instanceId -> getActiveInstance(storeProvider.getTaskStore(), key.getJob(), instanceId);
 
@@ -747,8 +754,6 @@ class JobUpdateControllerImpl implements JobUpdateController {
         }
       }
     }
-
-
   }
 
   @VisibleForTesting

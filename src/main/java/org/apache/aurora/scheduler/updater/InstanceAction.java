@@ -16,8 +16,8 @@ package org.apache.aurora.scheduler.updater;
 import java.util.Optional;
 
 import static org.apache.aurora.scheduler.updater.InstanceActionHandler.AddTask;
-import static org.apache.aurora.scheduler.updater.InstanceActionHandler.RestartTask;
 import static org.apache.aurora.scheduler.updater.InstanceActionHandler.KillTask;
+import static org.apache.aurora.scheduler.updater.InstanceActionHandler.RestartTask;
 import static org.apache.aurora.scheduler.updater.InstanceActionHandler.WatchRunningTask;
 
 enum InstanceAction {
