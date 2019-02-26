@@ -140,6 +140,10 @@ final class JobUpdateStateMachine {
   static final Function<JobUpdateStatus, JobUpdateStatus> GET_PAUSE_STATE =
       PAUSE_BEHAVIOR::get;
 
+  static JobUpdateStatus getPausedState(JobUpdateStatus status) {
+    return PAUSE_BEHAVIOR.get(status);
+  }
+
   private static final Map<JobUpdateStatus, JobUpdateStatus> RESUME_ACTIVE_BEHAVIOR =
       ImmutableMap.<JobUpdateStatus, JobUpdateStatus>builder()
           .putAll(ACTIVE_TO_PAUSED_STATES.inverse())

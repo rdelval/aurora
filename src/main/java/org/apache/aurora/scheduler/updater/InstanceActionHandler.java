@@ -13,6 +13,7 @@
  */
 package org.apache.aurora.scheduler.updater;
 
+import com.google.common.collect.ImmutableList;
 import java.util.Optional;
 
 import com.google.common.collect.ImmutableSet;
@@ -114,6 +115,37 @@ interface InstanceActionHandler {
             ImmutableSet.of(instance.getInstanceId()));
       }
       // A task state transition will trigger re-evaluation in this case, rather than a timer.
+      return Optional.empty();
+    }
+  }
+
+  class RestartTask implements InstanceActionHandler {
+
+    @Override
+    public Optional<Amount<Long, Time>> getReevaluationDelay(
+        IInstanceKey instance,
+        IJobUpdateInstructions instructions,
+        MutableStoreProvider storeProvider,
+        StateManager stateManager,
+        UpdateAgentReserver reserver,
+        JobUpdateStatus status,
+        IJobUpdateKey key,
+        SlaKillController slaKillController) throws UpdateStateException {
+
+      Optional<IScheduledTask> task = getExistingTask(storeProvider, instance);
+      ITaskConfig replacement = AddTask.getTargetConfig(
+          instructions,
+          status == ROLLING_FORWARD,
+          instance.getInstanceId());
+
+      LOG.info("Restarting " + instance + " while " + status);
+      stateManager.replaceTasks(
+          storeProvider,
+          task.get(),
+          replacement,
+          ImmutableSet.of(task.get().getAssignedTask().getInstanceId()));
+
+
       return Optional.empty();
     }
   }

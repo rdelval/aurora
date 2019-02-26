@@ -28,6 +28,7 @@ import com.google.common.collect.Maps;
 
 import org.apache.aurora.common.util.StateMachine;
 import org.apache.aurora.scheduler.updater.strategy.UpdateStrategy;
+import org.apache.aurora.scheduler.updater.strategy.VariableBatchStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,6 +63,7 @@ class OneWayJobUpdater<K, T> {
           .addState(OneWayStatus.FAILED, OneWayStatus.FAILED)
           .throwOnBadTransition(true)
           .build();
+  private boolean paused;
 
   /**
    * Creates a new one-way updater.
@@ -169,7 +171,7 @@ class OneWayJobUpdater<K, T> {
 
   private Map<K, SideEffect> startNextInstanceGroup(InstanceStateProvider<K, T> stateProvider) {
     Set<K> idle = filterByStatus(instances, IDLE);
-    if (idle.isEmpty()) {
+    if (idle.isEmpty() || this.paused) {
       return ImmutableMap.of();
     } else {
       ImmutableMap.Builder<K, SideEffect> builder = ImmutableMap.builder();
@@ -192,6 +194,22 @@ class OneWayJobUpdater<K, T> {
       }
     }
   }
+
+  public boolean autoPause(long pauseCount) {
+    if (strategy instanceof VariableBatchStrategy) {
+      LOG.info("Currently {} working {} succeeded instances", filterByStatus(instances, WORKING).size(), filterByStatus(instances, SUCCEEDED).size());
+      this.paused = ((VariableBatchStrategy) strategy).pause(filterByStatus(instances, WORKING).size() + filterByStatus(instances, SUCCEEDED).size(), instances.size(), pauseCount);
+
+      if (this.paused) {
+        ((VariableBatchStrategy) strategy).paused(true);
+      }
+    } else {
+      this.paused = false;
+    }
+
+    return this.paused;
+  }
+
 
   private OneWayStatus computeJobUpdateStatus() {
     Set<K> idle = filterByStatus(instances, IDLE);
@@ -244,6 +262,7 @@ class OneWayJobUpdater<K, T> {
         stateMachine.transition(status);
         statusChanges.add(status);
       }
+
 
       return new SideEffect(result.getAction(), statusChanges.build(), result.getFailure());
     }

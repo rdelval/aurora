@@ -38,6 +38,7 @@ import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.EVALUATE
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.FAILED_TERMINATED;
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.KILL_TASK_AND_EVALUATE_ON_STATE_CHANGE;
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.KILL_TASK_WITH_RESERVATION_AND_EVALUATE_ON_STATE_CHANGE;
+import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.REPLACE_TASK;
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.REPLACE_TASK_AND_EVALUATE_ON_STATE_CHANGE;
 import static org.apache.aurora.scheduler.updater.StateEvaluator.Result.SUCCEEDED;
 
@@ -105,6 +106,13 @@ class InstanceUpdater implements StateEvaluator<Optional<IScheduledTask>> {
     }
   }
 
+  public boolean isReplaced(Optional<IScheduledTask> actualState) {
+    boolean desiredPresent = desiredState.isPresent();
+    boolean actualPresent = isTaskPresent(actualState);
+
+    return desiredPresent && actualPresent;
+  }
+
   private boolean addFailureAndCheckIfFailed() {
     LOG.info("Observed updated task failure.");
     observedFailures++;
@@ -146,22 +154,7 @@ class InstanceUpdater implements StateEvaluator<Optional<IScheduledTask>> {
       }
     } else {
       // This is not the configuration that we would like to run.
-      if (isKillable(status)) {
-        // Task is active, kill it.
-        if (resourceFits(desiredState.get(), actualState.getAssignedTask().getTask())
-            && constraintsMatch(desiredState.get(), actualState.getAssignedTask().getTask())) {
-          // If the desired task fits into the existing offer, we reserve the offer.
-          return KILL_TASK_WITH_RESERVATION_AND_EVALUATE_ON_STATE_CHANGE;
-        } else {
-          // The resource requirements have increased, force fresh scheduling attempt.
-          return KILL_TASK_AND_EVALUATE_ON_STATE_CHANGE;
-        }
-      } else if (Tasks.isTerminated(status) && isPermanentlyKilled(actualState)) {
-        // The old task has exited, it is now safe to add the new one.
-        return REPLACE_TASK_AND_EVALUATE_ON_STATE_CHANGE;
-      }
+      return REPLACE_TASK;
     }
-
-    return EVALUATE_ON_STATE_CHANGE;
   }
 }

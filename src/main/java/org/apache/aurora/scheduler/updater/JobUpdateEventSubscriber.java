@@ -20,6 +20,8 @@ import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.inject.Inject;
 
 import org.apache.aurora.common.stats.Stats;
+import org.apache.aurora.gen.JobUpdateStatus;
+import org.apache.aurora.gen.ScheduleStatus;
 import org.apache.aurora.scheduler.base.InstanceKeys;
 import org.apache.aurora.scheduler.base.Tasks;
 import org.apache.aurora.scheduler.events.PubsubEvent;
@@ -53,6 +55,16 @@ class JobUpdateEventSubscriber extends AbstractIdleService implements PubsubEven
   @Subscribe
   public void taskChangedState(TaskStateChange change) {
     try {
+      LOG.info("{} id: {} transitioned from {} to {}", change.getTask().getAssignedTask().getTask().getJob(), change.getTask().getAssignedTask().getInstanceId(), change.getOldState(), change.getNewState());
+
+      // Restart mechanism will create a new task with a different ID while killing the existing one.
+      // This will cause the updating mechanism to fail since it will get an update for this task for both
+      // the kill and the create. The kill will make it seem like the update failed but this is the expected behavior.
+      // Therefore we trap the killed status if it is coming right after a restart status and make it a NOOP.
+      if( change.getOldState().get() == ScheduleStatus.RESTARTING &&
+          change.getNewState() == ScheduleStatus.KILLED) {
+        return;
+      }
       controller.instanceChangedState(change.getTask());
     } catch (RuntimeException e) {
       LOG.error("Failed to handle state change: " + e, e);

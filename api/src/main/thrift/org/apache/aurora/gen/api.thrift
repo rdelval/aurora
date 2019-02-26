@@ -726,6 +726,9 @@ struct QueueJobUpdateStrategy {
  */
 struct BatchJobUpdateStrategy {
   1: i32 groupSize
+
+  /* Pauses update automatically after every batch completion */
+  2: bool autoPause
 }
 
 /** Same as Batch strategy but each time an active group completes, the size of the next active
@@ -733,6 +736,8 @@ struct BatchJobUpdateStrategy {
  */
 struct VariableBatchJobUpdateStrategy {
   1: list<i32> groupSizes
+  /* Pauses update automatically after every batch completion */
+  2: bool autoPause
 }
 
 union JobUpdateStrategy {

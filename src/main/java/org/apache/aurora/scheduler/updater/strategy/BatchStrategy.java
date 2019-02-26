@@ -39,3 +39,4 @@ public class BatchStrategy<T extends Comparable<T>> extends ActiveLimitedStrateg
     return active.isEmpty() ? idle : ImmutableSet.of();
   }
 }
+

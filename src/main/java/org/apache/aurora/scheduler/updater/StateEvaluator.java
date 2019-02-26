@@ -52,6 +52,7 @@ interface StateEvaluator<T> {
   enum Result {
     EVALUATE_ON_STATE_CHANGE(Optional.of(InstanceAction.AWAIT_STATE_CHANGE), NO_FAILURE),
     REPLACE_TASK_AND_EVALUATE_ON_STATE_CHANGE(Optional.of(InstanceAction.ADD_TASK), NO_FAILURE),
+    REPLACE_TASK(Optional.of(InstanceAction.REPLACE_TASK), NO_FAILURE),
     KILL_TASK_AND_EVALUATE_ON_STATE_CHANGE(Optional.of(InstanceAction.KILL_TASK), NO_FAILURE),
     KILL_TASK_WITH_RESERVATION_AND_EVALUATE_ON_STATE_CHANGE(
         Optional.of(InstanceAction.KILL_TASK_AND_RESERVE), NO_FAILURE),

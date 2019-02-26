@@ -15,6 +15,7 @@ package org.apache.aurora.scheduler.state;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -51,6 +52,7 @@ import org.apache.aurora.scheduler.state.SideEffect.Action;
 import org.apache.aurora.scheduler.storage.Storage.MutableStoreProvider;
 import org.apache.aurora.scheduler.storage.TaskStore;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
+import org.apache.aurora.scheduler.storage.entities.IInstanceKey;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
 import org.apache.mesos.v1.Protos.AgentID;
@@ -63,6 +65,7 @@ import static org.apache.aurora.common.base.MorePreconditions.checkNotBlank;
 import static org.apache.aurora.gen.ScheduleStatus.ASSIGNED;
 import static org.apache.aurora.gen.ScheduleStatus.INIT;
 import static org.apache.aurora.gen.ScheduleStatus.PENDING;
+import static org.apache.aurora.gen.ScheduleStatus.RESTARTING;
 import static org.apache.aurora.gen.ScheduleStatus.THROTTLED;
 import static org.apache.aurora.scheduler.state.StateChangeResult.INVALID_CAS_STATE;
 import static org.apache.aurora.scheduler.state.StateChangeResult.SUCCESS;
@@ -135,6 +138,47 @@ public class StateManagerImpl implements StateManager {
           Optional.of(scheduledTask),
           Optional.of(PENDING),
           Optional.empty());
+    }
+  }
+
+  @Override
+  public void replaceTasks(MutableStoreProvider storeProvider,
+      IScheduledTask curTask,
+      ITaskConfig newTask,
+      Set<Integer> instanceIds) {
+
+    requireNonNull(storeProvider);
+    requireNonNull(newTask);
+    requireNonNull(curTask);
+
+    // Done outside the write transaction to minimize the work done inside a transaction.
+    Set<IScheduledTask> scheduledTasks = instanceIds.stream()
+        .map(instanceId -> createTask(instanceId, newTask))
+        .collect(Collectors.toSet());
+
+    Collection<IScheduledTask> activeInstances = storeProvider.getTaskStore().fetchTasks(
+        Query.instanceScoped(curTask.getAssignedTask().getTask().getJob(), instanceIds).active());
+
+    if (activeInstances.size() != instanceIds.size()) {
+      throw new IllegalArgumentException("Number of instances to restart does not match number of active tasks.");
+    }
+
+
+    for (IScheduledTask scheduledTask : activeInstances) {
+      // Change configuration of task
+      LOG.info("attempting to modify {}", Tasks.id(scheduledTask));
+      storeProvider.getUnsafeTaskStore().mutateTask(Tasks.id(scheduledTask), task1 -> {
+        ScheduledTask mutableTask = task1.newBuilder();
+        mutableTask.getAssignedTask().setTask(newTask.newBuilder());
+        return IScheduledTask.build(mutableTask);
+      });
+
+      updateTaskAndExternalState(
+          storeProvider.getUnsafeTaskStore(),
+          Tasks.id(scheduledTask),
+          Optional.of(scheduledTask),
+          Optional.of(RESTARTING),
+          Optional.of("Updating task config"));
     }
   }
 

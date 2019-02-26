@@ -63,8 +63,7 @@ interface UpdateFactory {
    */
   Update newUpdate(
       IJobUpdateInstructions configuration,
-      boolean rollingForward,
-      Runnable pause);
+      boolean rollingForward);
 
   class UpdateFactoryImpl implements UpdateFactory {
     private final Clock clock;
@@ -75,7 +74,7 @@ interface UpdateFactory {
     }
 
     @Override
-    public Update newUpdate(IJobUpdateInstructions instructions, boolean rollingForward, Runnable pause) {
+    public Update newUpdate(IJobUpdateInstructions instructions, boolean rollingForward) {
       requireNonNull(instructions);
       IJobUpdateSettings settings = instructions.getSettings();
 
@@ -148,8 +147,7 @@ interface UpdateFactory {
         strategy = new VariableBatchStrategy<>(
             updateOrder,
             settings.getUpdateStrategy().getVarBatchStrategy().getGroupSizes(),
-            rollingForward,
-                pause);
+            rollingForward);
       } else {
         strategy = new QueueStrategy<>(
             updateOrder,

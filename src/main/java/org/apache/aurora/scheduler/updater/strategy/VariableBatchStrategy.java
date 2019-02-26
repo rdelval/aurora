@@ -44,6 +44,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   private final boolean rollingForward;
   private Optional<Integer> totalModInstanceCount;
   private Runnable pause;
+  private boolean paused;
 
   private static final Logger LOG = LoggerFactory.getLogger(VariableBatchStrategy.class);
 
@@ -56,8 +57,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   public VariableBatchStrategy(
       Ordering<T> ordering,
       List<Integer> maxActiveGroups,
-      boolean rollingForward,
-      Runnable pause) {
+      boolean rollingForward) {
 
     this.ordering = Objects.requireNonNull(ordering);
     this.rollingForward = rollingForward;
@@ -67,20 +67,21 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     this.groupSizes = ImmutableList.copyOf(maxActiveGroups);
     this.totalModInstanceCount = Optional.empty();
     this.pause = pause;
+    this.paused = false;
   }
 
   // Determine how far we're into the update based upon how many instances are waiting
   // to be modified.
-  private int determineCurGroupSize(int remaining) {
+  public int determineCurGroupSize(int remaining, int total) {
     // Calculate which groupIndex we are in by finding out how many instances we have left to update
-    int modified = totalModInstanceCount.get() - remaining;
+    int modified = total - remaining;
     int finalGroupSize = Iterables.getLast(groupSizes);
 
     LOG.debug("Variable Batch Update progress: {} instances have been modified, "
             + "{} instances remain unmodified, and {} overall instances to be modified.",
         modified,
         remaining,
-        totalModInstanceCount.get());
+        total);
 
     if (rollingForward) {
       int sum = 0;
@@ -122,20 +123,72 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
     }
   }
 
+  public void paused(boolean pause) {
+    this.paused = pause;
+  }
+
   @Override
   public final Set<T> getNextGroup(Set<T> idle, Set<T> active) {
+
     // Get the size for the idle set on the first run only. This is representative of the number
     // of overall instance modifications this update will trigger.
     if (!totalModInstanceCount.isPresent()) {
       totalModInstanceCount = Optional.of(idle.size());
     }
 
+    if (this.paused) {
+      return ImmutableSet.of();
+    }
+
     // Limit group size to the current size of the group minus the number of instances currently
     // being modified.
     return ordering.sortedCopy(doGetNextGroup(idle, active)).stream()
-            .limit(Math.max(0, determineCurGroupSize(idle.size()) - active.size()))
+            .limit(Math.max(0, determineCurGroupSize(idle.size(), totalModInstanceCount.get()) - active.size()))
             .collect(Collectors.toSet());
+  }
 
+  public final boolean pause(int successCount, int totalInstances, long pauseCount) {
+
+    if (this.paused) {
+      return true;
+    }
+
+    int sum = 0;
+    int groupNumber = 0;
+    int modified = successCount;
+
+    for (int x=0; x < groupSizes.size(); ++x) {
+      sum += groupSizes.get(x);
+      groupNumber = x;
+
+      if (sum == modified) {
+        LOG.info("Barrier: Group number {} Pause Count {}", groupNumber, pauseCount);
+        return groupNumber == pauseCount;
+      }
+      if (sum > modified) {
+        LOG.info("Group number {} Pause Count {}", groupNumber, pauseCount);
+        return false;
+      }
+    }
+
+    // Overflow
+    int remaining =  totalInstances - modified;
+    int finalGroupSize = Iterables.getLast(groupSizes);
+
+    // Add number of times the final group was used for left over instances.
+    groupNumber += (modified - sum) / finalGroupSize;
+
+    if (remaining > 0) {
+      ++groupNumber;
+    }
+
+    LOG.info("Group number {} Pause Count {}", groupNumber, pauseCount);
+
+    if (remaining % finalGroupSize == 0){
+      return groupNumber == pauseCount;
+    } else {
+      return false;
+    }
   }
 
   /**
@@ -149,7 +202,6 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   Set<T> doGetNextGroup(Set<T> idle, Set<T> active) {
     if (active.isEmpty()) {
       LOG.info("Idle size: {} Active size: {}", idle.size(), active.size());
-        this.pause.run();
         return idle;
     } else {
       return ImmutableSet.of();

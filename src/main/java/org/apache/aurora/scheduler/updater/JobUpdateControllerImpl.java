@@ -45,6 +45,7 @@ import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.stats.StatsProvider;
 import org.apache.aurora.common.util.Clock;
 import org.apache.aurora.gen.JobInstanceUpdateEvent;
+import org.apache.aurora.gen.JobUpdate;
 import org.apache.aurora.gen.JobUpdateAction;
 import org.apache.aurora.gen.JobUpdateEvent;
 import org.apache.aurora.gen.JobUpdatePulseStatus;
@@ -101,6 +102,7 @@ import static org.apache.aurora.scheduler.updater.JobUpdateStateMachine.MonitorA
 import static org.apache.aurora.scheduler.updater.JobUpdateStateMachine.MonitorAction.STOP_WATCHING;
 import static org.apache.aurora.scheduler.updater.JobUpdateStateMachine.assertTransitionAllowed;
 import static org.apache.aurora.scheduler.updater.JobUpdateStateMachine.getBlockedState;
+import static org.apache.aurora.scheduler.updater.JobUpdateStateMachine.getPausedState;
 import static org.apache.aurora.scheduler.updater.OneWayJobUpdater.EvaluationResult;
 import static org.apache.aurora.scheduler.updater.OneWayJobUpdater.OneWayStatus;
 import static org.apache.aurora.scheduler.updater.OneWayJobUpdater.OneWayStatus.SUCCEEDED;
@@ -194,13 +196,7 @@ class JobUpdateControllerImpl implements JobUpdateController {
       IJobKey job = summary.getKey().getJob();
 
       // Validate the update configuration by making sure we can create an updater for it.
-      updateFactory.newUpdate(update.getInstructions(), true, ()-> {
-        try {
-          this.pause(summary.getKey(), new AuditData("System", Optional.of("Autopause")));
-        } catch (UpdateStateException u) {
-          LOG.error("Auto pause for update {} failed", summary.getKey());
-        }
-      });
+      updateFactory.newUpdate(update.getInstructions(), true);
 
       if (instructions.getInitialState().isEmpty() && !instructions.isSetDesiredState()) {
         throw new IllegalArgumentException("Update instruction is a no-op.");
@@ -231,8 +227,6 @@ class JobUpdateControllerImpl implements JobUpdateController {
         status = ROLL_FORWARD_AWAITING_PULSE;
         pulseHandler.initializePulseState(update, status, 0L);
       }
-
-      summary.getKey();
 
       recordAndChangeJobUpdateStatus(
           storeProvider,
@@ -413,10 +407,12 @@ class JobUpdateControllerImpl implements JobUpdateController {
   }
 
   private void instanceChanged(final IInstanceKey instance, final Optional<IScheduledTask> state) {
+
     taskEventBatchWorker.execute(storeProvider -> {
       IJobKey job = instance.getJobKey();
       UpdateFactory.Update update = updates.get(job);
       if (update != null) {
+        LOG.info("Changing task {} State {} " , InstanceKeys.toString(instance), state.get().getStatus());
         if (update.getUpdater().containsInstance(instance.getInstanceId())) {
           // We check to see if the state change is specified, and if it is, ensure that the new
           // state matches the current state. We do this because events are processed asynchronously
@@ -502,6 +498,7 @@ class JobUpdateControllerImpl implements JobUpdateController {
       IJobUpdateSummary updateSummary,
       JobUpdateEvent event) throws UpdateStateException {
 
+    LOG.info("Update Status {}, Event Status {}", updateSummary.getState().getStatus(),event.getStatus());
     if (updateSummary.getState().getStatus() == event.getStatus()) {
       return;
     }
@@ -555,13 +552,8 @@ class JobUpdateControllerImpl implements JobUpdateController {
       IJobUpdate jobUpdate = updateStore.fetchJobUpdate(key).get().getUpdate();
       UpdateFactory.Update update;
       try {
-        update = updateFactory.newUpdate(jobUpdate.getInstructions(), action == ROLL_FORWARD, ()-> {
-          try {
-            this.pause(key, new AuditData("System", Optional.of("Autopause")));
-          } catch (UpdateStateException u) {
-            LOG.error("Auto pause for update {} failed", key);
-          }
-        });      } catch (RuntimeException e) {
+        update = updateFactory.newUpdate(jobUpdate.getInstructions(), action == ROLL_FORWARD);
+      } catch (RuntimeException e) {
         LOG.warn("Uncaught exception: " + e, e);
         changeJobUpdateStatus(
             storeProvider,
@@ -634,6 +626,22 @@ class JobUpdateControllerImpl implements JobUpdateController {
           newEvent(blockedStatus).setMessage(PULSE_TIMEOUT_MESSAGE));
       return;
     }
+
+    long pauseEvents = updateStore.fetchJobUpdate(key).get()
+        .getUpdateEvents()
+        .stream()
+        .filter(e -> e.getStatus() == JobUpdateStatus.ROLL_FORWARD_PAUSED)
+        .count();
+
+    LOG.info("Number of pauses: {} Current State: {}", pauseEvents, summary.getState().getStatus());
+    if (update.getUpdater().autoPause(pauseEvents)) {
+      JobUpdateStatus pausedStatus = getPausedState(summary.getState().getStatus());
+      changeUpdateStatus(
+          storeProvider,
+          summary,
+          newEvent(pausedStatus).setMessage("Auto paused"));
+    }
+
 
     InstanceStateProvider<Integer, Optional<IScheduledTask>> stateProvider =
         instanceId -> getActiveInstance(storeProvider.getTaskStore(), key.getJob(), instanceId);
@@ -739,6 +747,8 @@ class JobUpdateControllerImpl implements JobUpdateController {
         }
       }
     }
+
+
   }
 
   @VisibleForTesting

@@ -19,6 +19,8 @@ import java.util.function.Function;
 
 import org.apache.aurora.gen.ScheduleStatus;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
+import org.apache.aurora.scheduler.storage.entities.IInstanceKey;
+import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
 import org.apache.mesos.v1.Protos.AgentID;
 
@@ -93,4 +95,9 @@ public interface StateManager {
    * @param taskIds IDs of tasks to delete.
    */
   void deleteTasks(MutableStoreProvider storeProvider, Set<String> taskIds);
+
+  void replaceTasks(MutableStoreProvider storeProvider,
+      IScheduledTask curTask,
+      ITaskConfig newTask,
+      Set<Integer> instanceIds);
 }
