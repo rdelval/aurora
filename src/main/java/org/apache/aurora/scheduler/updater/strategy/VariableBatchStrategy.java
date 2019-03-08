@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory;
  *
  * @param <T> Instance type.
  */
-public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStrategy<T> {
+public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStrategy<T>, AutoPauseEnabledStrategy {
   private final Ordering<T> ordering;
   protected final ImmutableList<Integer> groupSizes;
   private final boolean rollingForward;
@@ -141,5 +141,10 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
    */
   Set<T> doGetNextGroup(Set<T> idle, Set<T> active) {
     return active.isEmpty() ? idle : ImmutableSet.of();
+  }
+
+  @Override
+  public boolean autoPause() {
+    return true;
   }
 }

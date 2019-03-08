@@ -23,7 +23,9 @@ import com.google.common.collect.Ordering;
  *
  * @param <T> Instance type.
  */
-public class BatchStrategy<T extends Comparable<T>> extends ActiveLimitedStrategy<T> {
+public class BatchStrategy<T extends Comparable<T>>
+    extends ActiveLimitedStrategy<T>
+    implements AutoPauseEnabledStrategy {
 
   /**
    * Creates a batch strategy that will allow a limited number of active entries.
@@ -37,5 +39,10 @@ public class BatchStrategy<T extends Comparable<T>> extends ActiveLimitedStrateg
   @Override
   Set<T> doGetNextGroup(Set<T> idle, Set<T> active) {
     return active.isEmpty() ? idle : ImmutableSet.of();
+  }
+
+  @Override
+  public boolean autoPause() {
+    return false;
   }
 }
