@@ -641,10 +641,27 @@ class JobUpdateControllerImpl implements JobUpdateController {
     if (update.getUpdater().autoPauseEnabled() &&
         updaterStatus == ROLLING_FORWARD &&
         instancesSeen.containsKey(key)) {
-      if (!instancesSeen.get(key).containsAll(result.getSideEffects().keySet())) {
-        instancesSeen.get(key).addAll(result.getSideEffects().keySet());
-        JobUpdateStatus pausedStatus = getPausedState(summary.getState().getStatus());
-        changeUpdateStatus(storeProvider, summary, newEvent(pausedStatus).setMessage("Auto paused"));
+
+      Set<Integer> instancesInFlight = instancesSeen.get(key);
+      Set<Integer> instancesBeingUpdated = result.getSideEffects().keySet();
+
+      // On the final batch, pause for acknowledgement and remove the cache of instances.
+      // This will cause the else branch to get run on resume and the update will finish.
+      if (result.getStatus() == SUCCEEDED ) {
+        instancesSeen.remove(key);
+        changeUpdateStatus(storeProvider,
+            summary,
+            newEvent(getPausedState(summary.getState().getStatus())).setMessage("Auto paused"));
+        return;
+      }
+
+      // If the update evaluation is dealing with new instances, that signals we are at a barrier
+      // crossing.
+      if (!instancesInFlight.containsAll(instancesBeingUpdated)) {
+        instancesInFlight.addAll(instancesBeingUpdated);
+        changeUpdateStatus(storeProvider,
+            summary,
+            newEvent(getPausedState(summary.getState().getStatus())).setMessage("Auto paused"));
         return;
       }
     } else {
@@ -702,9 +719,6 @@ class JobUpdateControllerImpl implements JobUpdateController {
             "A terminal state should not specify actions: " + result);
       }
 
-      // Cleans up after auto paused enabled updates. NOOP if it was not an auto pause
-      // enabled update.
-      instancesSeen.remove(key);
 
       JobUpdateEvent event = new JobUpdateEvent();
       if (status == SUCCEEDED) {
@@ -722,6 +736,10 @@ class JobUpdateControllerImpl implements JobUpdateController {
             break;
           }
         }
+
+        // Cleans up after auto paused enabled updates. NOOP if it was not an auto pause
+        // enabled update. Only needed for FAILED since SUCCESS cleans up earlier.
+        instancesSeen.remove(key);
       }
       changeUpdateStatus(storeProvider, summary, event);
     } else {
