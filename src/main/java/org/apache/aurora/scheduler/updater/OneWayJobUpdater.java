@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 
 import org.apache.aurora.common.util.StateMachine;
+import org.apache.aurora.scheduler.updater.strategy.AutoPauseEnabledStrategy;
 import org.apache.aurora.scheduler.updater.strategy.UpdateStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -204,6 +205,15 @@ class OneWayJobUpdater<K, T> {
     }
 
     return stateMachine.getState();
+  }
+
+
+  public boolean autoPauseEnabled() {
+    if (strategy instanceof AutoPauseEnabledStrategy) {
+      return ((AutoPauseEnabledStrategy)strategy).autoPause();
+    }
+
+    return false;
   }
 
   /**
