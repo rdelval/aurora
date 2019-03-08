@@ -16,10 +16,12 @@ package org.apache.aurora.scheduler.updater;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -101,6 +103,7 @@ import static org.apache.aurora.scheduler.updater.JobUpdateStateMachine.MonitorA
 import static org.apache.aurora.scheduler.updater.JobUpdateStateMachine.MonitorAction.STOP_WATCHING;
 import static org.apache.aurora.scheduler.updater.JobUpdateStateMachine.assertTransitionAllowed;
 import static org.apache.aurora.scheduler.updater.JobUpdateStateMachine.getBlockedState;
+import static org.apache.aurora.scheduler.updater.JobUpdateStateMachine.getPausedState;
 import static org.apache.aurora.scheduler.updater.OneWayJobUpdater.EvaluationResult;
 import static org.apache.aurora.scheduler.updater.OneWayJobUpdater.OneWayStatus;
 import static org.apache.aurora.scheduler.updater.OneWayJobUpdater.OneWayStatus.SUCCEEDED;
@@ -132,6 +135,11 @@ class JobUpdateControllerImpl implements JobUpdateController {
   // and completed updates are represented only in storage, not here.
   private final Map<IJobKey, UpdateFactory.Update> updates =
       Collections.synchronizedMap(Maps.newHashMap());
+
+  // Used only for updates that have auto pause enabled. Keeps track of what instances
+  // have already been seen by the updater in order to detect when a new batch is started.
+  private final Map<IJobUpdateKey, Set<Integer>> instancesSeen =
+      new ConcurrentHashMap<IJobUpdateKey, Set<Integer>>();
 
   private final LoadingCache<JobUpdateStatus, AtomicLong> jobUpdateEventStats;
   private final LoadingCache<JobUpdateAction, AtomicLong> jobUpdateActionStats;
@@ -629,6 +637,20 @@ class JobUpdateControllerImpl implements JobUpdateController {
 
     LOG.info(key + " evaluation result: " + result);
 
+    // Only apply auto-pause to an update rolling forward.
+    if (update.getUpdater().autoPauseEnabled() &&
+        updaterStatus == ROLLING_FORWARD &&
+        instancesSeen.containsKey(key)) {
+      if (!instancesSeen.get(key).containsAll(result.getSideEffects().keySet())) {
+        instancesSeen.get(key).addAll(result.getSideEffects().keySet());
+        JobUpdateStatus pausedStatus = getPausedState(summary.getState().getStatus());
+        changeUpdateStatus(storeProvider, summary, newEvent(pausedStatus).setMessage("Auto paused"));
+        return;
+      }
+    } else {
+      instancesSeen.put(key, new HashSet<Integer>(result.getSideEffects().keySet()));
+    }
+
     for (Map.Entry<Integer, SideEffect> entry : result.getSideEffects().entrySet()) {
       Iterable<InstanceUpdateStatus> statusChanges;
 
@@ -679,6 +701,10 @@ class JobUpdateControllerImpl implements JobUpdateController {
         throw new IllegalArgumentException(
             "A terminal state should not specify actions: " + result);
       }
+
+      // Cleans up after auto paused enabled updates. NOOP if it was not an auto pause
+      // enabled update.
+      instancesSeen.remove(key);
 
       JobUpdateEvent event = new JobUpdateEvent();
       if (status == SUCCEEDED) {
