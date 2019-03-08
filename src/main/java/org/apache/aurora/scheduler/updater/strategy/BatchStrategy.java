@@ -44,7 +44,7 @@ public class BatchStrategy<T extends Comparable<T>>
   }
 
   @Override
-  public boolean autoPause() {
+  public boolean autoPauseEnabled() {
     return autoPause;
   }
 }

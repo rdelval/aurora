@@ -207,10 +207,17 @@ class OneWayJobUpdater<K, T> {
     return stateMachine.getState();
   }
 
+  /**
+   * Checks whether the strategy being used for this update supports auto pausing, and if it
+   * does, whether it has been enabled.
+   *
+   * @return {@code true} if the update strategy supports auto pause and it is enabled.
+   *         {@code false} otherwise.
+   */
 
   public boolean autoPauseEnabled() {
     if (strategy instanceof AutoPauseEnabledStrategy) {
-      return ((AutoPauseEnabledStrategy)strategy).autoPause();
+      return ((AutoPauseEnabledStrategy) strategy).autoPauseEnabled();
     }
 
     return false;
