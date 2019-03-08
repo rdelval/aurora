@@ -637,35 +637,11 @@ class JobUpdateControllerImpl implements JobUpdateController {
 
     LOG.info(key + " evaluation result: " + result);
 
-    // Only apply auto-pause to an update rolling forward.
-    if (update.getUpdater().autoPauseEnabled() &&
-        updaterStatus == ROLLING_FORWARD &&
-        instancesSeen.containsKey(key)) {
-
-      Set<Integer> instancesInFlight = instancesSeen.get(key);
-      Set<Integer> instancesBeingUpdated = result.getSideEffects().keySet();
-
-      // On the final batch, pause for acknowledgement and remove the cache of instances.
-      // This will cause the else branch to get run on resume and the update will finish.
-      if (result.getStatus() == SUCCEEDED ) {
-        instancesSeen.remove(key);
-        changeUpdateStatus(storeProvider,
-            summary,
-            newEvent(getPausedState(summary.getState().getStatus())).setMessage("Auto paused"));
-        return;
-      }
-
-      // If the update evaluation is dealing with new instances, that signals we are at a barrier
-      // crossing.
-      if (!instancesInFlight.containsAll(instancesBeingUpdated)) {
-        instancesInFlight.addAll(instancesBeingUpdated);
-        changeUpdateStatus(storeProvider,
-            summary,
-            newEvent(getPausedState(summary.getState().getStatus())).setMessage("Auto paused"));
-        return;
-      }
-    } else {
-      instancesSeen.put(key, new HashSet<Integer>(result.getSideEffects().keySet()));
+    if (update.getUpdater().autoPauseEnabled() && maybeAutoPause(summary, result)) {
+      changeUpdateStatus(storeProvider,
+          summary,
+          newEvent(getPausedState(summary.getState().getStatus())).setMessage("Auto paused"));
+      return;
     }
 
     for (Map.Entry<Integer, SideEffect> entry : result.getSideEffects().entrySet()) {
@@ -718,7 +694,6 @@ class JobUpdateControllerImpl implements JobUpdateController {
         throw new IllegalArgumentException(
             "A terminal state should not specify actions: " + result);
       }
-
 
       JobUpdateEvent event = new JobUpdateEvent();
       if (status == SUCCEEDED) {
@@ -844,6 +819,39 @@ class JobUpdateControllerImpl implements JobUpdateController {
             }
           }
         }));
+  }
+
+  @VisibleForTesting
+  private boolean maybeAutoPause(IJobUpdateSummary summary, EvaluationResult<Integer> result) {
+    JobUpdateStatus updaterStatus = summary.getState().getStatus();
+    final IJobUpdateKey key = summary.getKey();
+
+    // Only apply auto-pause to an update rolling forward.
+    if (updaterStatus != ROLLING_FORWARD) {
+      return false;
+    }
+
+    if (instancesSeen.containsKey(key)) {
+      Set<Integer> instancesCached = instancesSeen.get(key);
+      Set<Integer> instancesBeingUpdated = result.getSideEffects().keySet();
+
+      // On the final batch, pause for acknowledgement and remove the cache of instances.
+      // This will cause the else branch to get run on resume and the update will finish.
+      if (result.getStatus() == SUCCEEDED) {
+        instancesSeen.remove(key);
+        return true;
+      }
+
+      // If the update evaluation is dealing with new instances, that signals we are at a barrier
+      // crossing.
+      if (!instancesCached.containsAll(instancesBeingUpdated)) {
+        instancesCached.addAll(instancesBeingUpdated);
+        return true;
+      }
+    } else {
+      instancesSeen.put(key, new HashSet<Integer>(result.getSideEffects().keySet()));
+    }
+    return false;
   }
 
   private static class PulseHandler {

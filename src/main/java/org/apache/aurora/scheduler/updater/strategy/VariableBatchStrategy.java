@@ -35,7 +35,9 @@ import org.slf4j.LoggerFactory;
  *
  * @param <T> Instance type.
  */
-public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStrategy<T>, AutoPauseEnabledStrategy {
+public class VariableBatchStrategy<T extends Comparable<T>> implements
+    UpdateStrategy<T>,
+    AutoPauseEnabledStrategy {
   private final Ordering<T> ordering;
   protected final ImmutableList<Integer> groupSizes;
   private final boolean rollingForward;
@@ -147,7 +149,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStr
   }
 
   @Override
-  public boolean autoPause() {
+  public boolean autoPauseEnabled() {
     return autoPause;
   }
 }
