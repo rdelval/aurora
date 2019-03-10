@@ -138,8 +138,8 @@ class JobUpdateControllerImpl implements JobUpdateController {
 
   // Used only for updates that have auto pause enabled. Keeps track of what instances
   // have already been seen by the updater in order to detect when a new batch is started.
-  private final Map<IJobUpdateKey, Set<Integer>> instancesSeen =
-      new ConcurrentHashMap<IJobUpdateKey, Set<Integer>>();
+  private final Map<IJobUpdateKey, Integer> instancesSeen =
+      new ConcurrentHashMap<IJobUpdateKey, Integer>();
 
   private final LoadingCache<JobUpdateStatus, AtomicLong> jobUpdateEventStats;
   private final LoadingCache<JobUpdateAction, AtomicLong> jobUpdateActionStats;
@@ -831,9 +831,14 @@ class JobUpdateControllerImpl implements JobUpdateController {
       return false;
     }
 
+    Integer maybeNewHighestInstance = result.getSideEffects()
+        .keySet()
+        .stream()
+        .max(Integer::compareTo)
+        .get();
+
     if (instancesSeen.containsKey(key)) {
-      Set<Integer> instancesCached = instancesSeen.get(key);
-      Set<Integer> instancesBeingUpdated = result.getSideEffects().keySet();
+      Integer currentHighestInstance = instancesSeen.get(key);
 
       // On the final batch, pause for acknowledgement and remove the cache of instances.
       // This will cause the else branch to get run on resume and the update will finish.
@@ -844,12 +849,12 @@ class JobUpdateControllerImpl implements JobUpdateController {
 
       // If the update evaluation is dealing with new instances, that signals we are at a barrier
       // crossing.
-      if (!instancesCached.containsAll(instancesBeingUpdated)) {
-        instancesCached.addAll(instancesBeingUpdated);
+      if (currentHighestInstance < maybeNewHighestInstance) {
+        instancesSeen.put(key, maybeNewHighestInstance);
         return true;
       }
     } else {
-      instancesSeen.put(key, new HashSet<Integer>(result.getSideEffects().keySet()));
+      instancesSeen.put(key, maybeNewHighestInstance);
     }
     return false;
   }
