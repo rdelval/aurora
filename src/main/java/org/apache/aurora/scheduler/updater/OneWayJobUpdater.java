@@ -63,6 +63,7 @@ class OneWayJobUpdater<K, T> {
           .addState(OneWayStatus.FAILED, OneWayStatus.FAILED)
           .throwOnBadTransition(true)
           .build();
+  private final boolean autoPauseEnabled;
 
   /**
    * Creates a new one-way updater.
@@ -84,6 +85,12 @@ class OneWayJobUpdater<K, T> {
     this.instances = ImmutableMap.copyOf(Maps.transformEntries(
         instanceEvaluators,
         (key, value) -> new InstanceUpdate<>("Instance " + key, value)));
+
+    if (strategy instanceof AutoPauseEnabledStrategy) {
+      this.autoPauseEnabled = ((AutoPauseEnabledStrategy) strategy).autoPauseEnabled();
+    } else {
+      this.autoPauseEnabled = false;
+    }
   }
 
   private static final Function<InstanceUpdate<?>, SideEffect.InstanceUpdateStatus> GET_STATE =
@@ -215,12 +222,8 @@ class OneWayJobUpdater<K, T> {
    *         {@code false} otherwise.
    */
 
-  public boolean autoPauseEnabled() {
-    if (strategy instanceof AutoPauseEnabledStrategy) {
-      return ((AutoPauseEnabledStrategy) strategy).autoPauseEnabled();
-    }
-
-    return false;
+  public boolean isAutoPauseEnabled() {
+    return autoPauseEnabled;
   }
 
   /**
