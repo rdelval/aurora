@@ -14,6 +14,9 @@
   or a `VariableBatchUpdateStrategy` object. `QueueUpdateStrategy` and `BatchUpdateStrategy` take
   a single integer argument while `VariableBatchUpdateStrategy` takes a list of positive integers
   as an argument.
+- Auto pause feature added to both Batch strategies. With this feature enabled, when an update is
+  is ROLLING_FORWARD, the update will automatically pause itself right before a new batch
+  is started.
 
 ### Deprecations and removals:
 
