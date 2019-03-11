@@ -1892,12 +1892,12 @@ public class JobUpdaterIT extends EasyMockTest {
         .setUpdateStrategy(
             JobUpdateStrategy.varBatchStrategy(
                 new VariableBatchJobUpdateStrategy()
-                    .setGroupSizes(ImmutableList.of(1,2,3))
+                    .setGroupSizes(ImmutableList.of(1, 2, 3))
                     .setAutoPause(true)));
     IJobUpdate update = setInstanceCount(IJobUpdate.build(builder), 6);
     insertInitialTasks(update);
 
-    for(int i=0; i <= 5; ++i) {
+    for (int i = 0; i <= 5; ++i) {
       changeState(JOB, i, ASSIGNED, STARTING, RUNNING);
     }
     clock.advance(WATCH_TIMEOUT);
