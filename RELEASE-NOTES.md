@@ -16,6 +16,9 @@
   as an argument.
 - Users may now set a value for the URI fetcher to rename a downloaded artifact to after it
   has been downloaded.
+- Auto pause feature added to both Batch strategies. With this feature enabled, when an update is
+  is ROLLING_FORWARD, the update will automatically pause itself right before a new batch
+  is started.
 
 ### Deprecations and removals:
 
