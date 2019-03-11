@@ -17,6 +17,9 @@
 - Auto pause feature added to both Batch strategies. With this feature enabled, when an update is
   is ROLLING_FORWARD, the update will automatically pause itself right before a new batch
   is started.
+- loader.load() now uses memoization on the config file path so that we only load and process
+  each config file once.
+- Custom executors will no longer show links to thermos observer.
 
 ### Deprecations and removals:
 
@@ -25,6 +28,9 @@
   instead. Note that these same constructs, as represented in the Aurora DSL, are still valid
   as they will be converted to the new field automatically by the client
   for backwards compatibility.
+- Backfill code for finding a matching tier to for a Job has been removed. Tier will now be set
+  when a Job is received by the scheduler. If no tier is provided, the default tier defined in
+  `-tier_config`.
 
 0.21.0
 ======
