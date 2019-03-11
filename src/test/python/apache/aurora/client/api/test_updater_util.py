@@ -107,7 +107,7 @@ class TestUpdaterUtil(unittest.TestCase):
     config = UpdaterConfig(
       UpdateConfig(
         update_strategy=self.UPDATE_STRATEGIES(
-          PystachioVariableBatchUpdateStrategy(batch_sizes=[1, 2, 3, 4]))))
+          PystachioVariableBatchUpdateStrategy(batch_sizes=[1, 2, 3, 4], auto_pause=True))))
 
     thrift_update_config = config.to_thrift_update_settings()
 
@@ -116,7 +116,7 @@ class TestUpdaterUtil(unittest.TestCase):
     update_settings.updateStrategy = JobUpdateStrategy(
       batchStrategy=None,
       queueStrategy=None,
-      varBatchStrategy=VariableBatchJobUpdateStrategy(groupSizes=(1, 2, 3, 4)))
+      varBatchStrategy=VariableBatchJobUpdateStrategy(groupSizes=(1, 2, 3, 4), autoPause=True))
 
     assert thrift_update_config == update_settings
 
