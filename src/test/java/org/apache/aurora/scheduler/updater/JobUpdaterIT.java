@@ -1967,6 +1967,86 @@ public class JobUpdaterIT extends EasyMockTest {
             .build());
   }
 
+  @Test
+  public void testSuccessfulVarBatchedUpdateAutoPauseWithRollback() throws Exception {
+    expectTaskKilled().times(4);
+
+    control.replay();
+
+    // This update will add an instances and update two instances
+    JobUpdate builder = makeJobUpdate(makeInstanceConfig(0, 1, OLD_CONFIG)).newBuilder();
+    builder.getInstructions().getSettings()
+        .setMaxFailedInstances(0)
+        .setUpdateStrategy(
+            JobUpdateStrategy.varBatchStrategy(
+                new VariableBatchJobUpdateStrategy()
+                    .setGroupSizes(ImmutableList.of(1, 2))
+                    .setAutoPause(true)));
+    IJobUpdate update = setInstanceCount(IJobUpdate.build(builder), 3);
+    insertInitialTasks(update);
+
+    // Only have two instances so that one has to be added to test the add instance feature
+    // of this strategy
+    changeState(JOB, 0, ASSIGNED, STARTING, RUNNING);
+    changeState(JOB, 1, ASSIGNED, STARTING, RUNNING);
+
+    clock.advance(WATCH_TIMEOUT);
+
+    ImmutableMultimap.Builder<Integer, JobUpdateAction> actions = ImmutableMultimap.builder();
+
+    // First batch is updated, Instance will be created
+    updater.start(update, AUDIT);
+    actions.put(2, INSTANCE_UPDATING);
+    assertState(ROLLING_FORWARD, actions.build());
+    changeState(JOB, 2, ASSIGNED, STARTING, RUNNING);
+    clock.advance(WATCH_TIMEOUT);
+
+    // Update should now be paused after first batch is done.
+    assertState(ROLL_FORWARD_PAUSED, actions.build());
+    updater.resume(UPDATE_ID, AUDIT);
+
+    actions.put(2, INSTANCE_UPDATED).put(0, INSTANCE_UPDATING).put(1, INSTANCE_UPDATING);
+    assertState(ROLLING_FORWARD, actions.build());
+
+    // Move on to batch two
+    changeState(JOB, 0, KILLED, ASSIGNED, STARTING, RUNNING);
+    clock.advance(WATCH_TIMEOUT);
+
+    // Trigger a rollback job half way through by failing task 1
+    changeState(JOB, 1, FINISHED, ASSIGNED, STARTING, RUNNING);
+    clock.advance(FLAPPING_THRESHOLD);
+    changeState(JOB, 1, FAILED);
+
+    actions.putAll(0, INSTANCE_UPDATED, INSTANCE_ROLLING_BACK)
+        .putAll(1, INSTANCE_UPDATE_FAILED, INSTANCE_ROLLING_BACK);
+
+    assertState(ROLLING_BACK, actions.build());
+    assertLatestUpdateMessage(JobUpdateControllerImpl.failureMessage(1, Failure.EXITED));
+
+    // Rollback Instances 0 and 1
+    changeState(JOB, 0, KILLED, ASSIGNED, STARTING, RUNNING);
+    changeState(JOB, 1, ASSIGNED, STARTING, RUNNING);
+    clock.advance(WATCH_TIMEOUT);
+
+    actions.put(0, INSTANCE_ROLLED_BACK).put(1, INSTANCE_ROLLED_BACK).put(2, INSTANCE_ROLLING_BACK);
+    assertState(ROLLING_BACK, actions.build());
+
+    // Rollback instance 2
+    changeState(JOB, 2, KILLED);
+    actions.put(2, INSTANCE_ROLLED_BACK);
+
+    clock.advance(WATCH_TIMEOUT);
+
+    assertState(ROLLED_BACK, actions.build());
+
+    assertJobState(
+        JOB,
+        ImmutableMap.<Integer, ITaskConfig>builder()
+            .put(0, OLD_CONFIG)
+            .put(1, OLD_CONFIG)
+            .build());
+  }
+
   private Collection<IScheduledTask> getTasksInState(IJobKey job, ScheduleStatus status) {
     return storage.write(storeProvider ->
         storeProvider.getTaskStore().fetchTasks(Query.jobScoped(job).byStatus(status)));
