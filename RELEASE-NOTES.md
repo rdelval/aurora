@@ -19,7 +19,7 @@
   is started.
 - loader.load() now uses memoization on the config file path so that we only load and process
   each config file once.
-- Custom executors will no longer show links to thermos observer.
+- Instances run with custom executors will no longer show links to thermos observer.
 
 ### Deprecations and removals:
 
