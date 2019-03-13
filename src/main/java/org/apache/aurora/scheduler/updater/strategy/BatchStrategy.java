@@ -27,15 +27,15 @@ public class BatchStrategy<T extends Comparable<T>>
     extends ActiveLimitedStrategy<T>
     implements AutoPauseEnabledStrategy {
 
-  private final boolean autoPause;
+  private final boolean autopauseAfterBatch;
   /**
    * Creates a batch strategy that will allow a limited number of active entries.
    *
    * @param maxActive The maximum number of active entries.
    */
-  public BatchStrategy(Ordering<T> ordering, int maxActive, boolean autoPause) {
+  public BatchStrategy(Ordering<T> ordering, int maxActive, boolean autopauseAfterBatch) {
     super(ordering, maxActive);
-    this.autoPause = autoPause;
+    this.autopauseAfterBatch = autopauseAfterBatch;
   }
 
   @Override
@@ -45,6 +45,6 @@ public class BatchStrategy<T extends Comparable<T>>
 
   @Override
   public boolean autoPauseEnabled() {
-    return autoPause;
+    return autopauseAfterBatch;
   }
 }

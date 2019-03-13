@@ -1827,7 +1827,7 @@ public class JobUpdaterIT extends EasyMockTest {
     builder.getInstructions().getSettings()
         .setUpdateStrategy(
             JobUpdateStrategy.batchStrategy(
-                new BatchJobUpdateStrategy().setGroupSize(2).setAutoPause(true)));
+                new BatchJobUpdateStrategy().setGroupSize(2).setAutopauseAfterBatch(true)));
     IJobUpdate update = IJobUpdate.build(builder);
     insertInitialTasks(update);
 
@@ -1893,7 +1893,7 @@ public class JobUpdaterIT extends EasyMockTest {
             JobUpdateStrategy.varBatchStrategy(
                 new VariableBatchJobUpdateStrategy()
                     .setGroupSizes(ImmutableList.of(1, 2, 3))
-                    .setAutoPause(true)));
+                    .setAutopauseAfterBatch(true)));
     IJobUpdate update = setInstanceCount(IJobUpdate.build(builder), 6);
     insertInitialTasks(update);
 
@@ -1981,7 +1981,7 @@ public class JobUpdaterIT extends EasyMockTest {
             JobUpdateStrategy.varBatchStrategy(
                 new VariableBatchJobUpdateStrategy()
                     .setGroupSizes(ImmutableList.of(1, 2))
-                    .setAutoPause(true)));
+                    .setAutopauseAfterBatch(true)));
     IJobUpdate update = setInstanceCount(IJobUpdate.build(builder), 3);
     insertInitialTasks(update);
 
