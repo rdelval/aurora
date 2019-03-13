@@ -118,7 +118,7 @@ class TestUpdaterUtil(unittest.TestCase):
       batchStrategy=None,
       queueStrategy=None,
       varBatchStrategy=VariableBatchJobUpdateStrategy(groupSizes=(1, 2, 3, 4),
-                                                      autopause_after_batch=True))
+                                                      autopauseAfterBatch=True))
 
     assert thrift_update_config == update_settings
 
@@ -158,7 +158,8 @@ class TestUpdaterUtil(unittest.TestCase):
 
     update_settings = copy.deepcopy(self.EXPECTED_JOB_UPDATE_SETTINGS)
     update_settings.updateStrategy = JobUpdateStrategy(
-        batchStrategy=BatchJobUpdateStrategy(groupSize=1),
+        batchStrategy=BatchJobUpdateStrategy(groupSize=1,
+                                             autopauseAfterBatch=False),
         queueStrategy=None,
         varBatchStrategy=None)
     update_settings.waitForBatchCompletion = True
