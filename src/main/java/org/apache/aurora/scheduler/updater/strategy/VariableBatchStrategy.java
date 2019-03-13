@@ -41,7 +41,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements
   private final Ordering<T> ordering;
   protected final ImmutableList<Integer> groupSizes;
   private final boolean rollingForward;
-  private final boolean autoPause;
+  private final boolean autopauseAfterBatch;
   private Optional<Integer> totalModInstanceCount;
 
   private static final Logger LOG = LoggerFactory.getLogger(VariableBatchStrategy.class);
@@ -56,7 +56,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements
       Ordering<T> ordering,
       List<Integer> maxActiveGroups,
       boolean rollingForward,
-      boolean autoPause) {
+      boolean autopauseAfterBatch) {
 
     this.ordering = Objects.requireNonNull(ordering);
     this.rollingForward = rollingForward;
@@ -65,7 +65,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements
 
     this.groupSizes = ImmutableList.copyOf(maxActiveGroups);
     this.totalModInstanceCount = Optional.empty();
-    this.autoPause = autoPause;
+    this.autopauseAfterBatch = autopauseAfterBatch;
   }
 
   // Determine how far we're into the update based upon how many instances are waiting
@@ -150,6 +150,6 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements
 
   @Override
   public boolean autoPauseEnabled() {
-    return autoPause;
+    return autopauseAfterBatch;
   }
 }
