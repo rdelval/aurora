@@ -1818,7 +1818,7 @@ public class JobUpdaterIT extends EasyMockTest {
   }
 
   @Test
-  public void testSuccessfulBatchedUpdateAutoPause() throws Exception {
+  public void testSuccessfulBatchUpdateAutoPause() throws Exception {
     expectTaskKilled().times(3);
 
     control.replay();
@@ -1882,7 +1882,7 @@ public class JobUpdaterIT extends EasyMockTest {
   }
 
   @Test
-  public void testSuccessfulVarBatchedUpdateAutoPause() throws Exception {
+  public void testSuccessfulVarBatchUpdateAutoPause() throws Exception {
     expectTaskKilled().times(6);
 
     control.replay();
@@ -1968,7 +1968,7 @@ public class JobUpdaterIT extends EasyMockTest {
   }
 
   @Test
-  public void testSuccessfulVarBatchedUpdateAutoPauseWithRollback() throws Exception {
+  public void testSuccessfulVarBatchUpdateAutoPauseWithRollback() throws Exception {
     expectTaskKilled().times(4);
 
     control.replay();

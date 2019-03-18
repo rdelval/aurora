@@ -142,14 +142,12 @@ interface UpdateFactory {
       if (settings.getUpdateStrategy().isSetBatchStrategy()) {
         strategy = new BatchStrategy<>(
             updateOrder,
-            settings.getUpdateStrategy().getBatchStrategy().getGroupSize(),
-            settings.getUpdateStrategy().getBatchStrategy().isAutopauseAfterBatch());
+            settings.getUpdateStrategy().getBatchStrategy().getGroupSize());
       } else if (settings.getUpdateStrategy().isSetVarBatchStrategy()) {
         strategy = new VariableBatchStrategy<>(
             updateOrder,
             settings.getUpdateStrategy().getVarBatchStrategy().getGroupSizes(),
-            rollingForward,
-            settings.getUpdateStrategy().getVarBatchStrategy().isAutopauseAfterBatch());
+            rollingForward);
       } else {
         strategy = new QueueStrategy<>(
             updateOrder,

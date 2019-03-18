@@ -71,6 +71,7 @@ import org.apache.aurora.scheduler.storage.entities.IJobUpdateEvent;
 import org.apache.aurora.scheduler.storage.entities.IJobUpdateInstructions;
 import org.apache.aurora.scheduler.storage.entities.IJobUpdateKey;
 import org.apache.aurora.scheduler.storage.entities.IJobUpdateQuery;
+import org.apache.aurora.scheduler.storage.entities.IJobUpdateStrategy;
 import org.apache.aurora.scheduler.storage.entities.IJobUpdateSummary;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.aurora.scheduler.updater.StateEvaluator.Failure;
@@ -119,6 +120,7 @@ class JobUpdateControllerImpl implements JobUpdateController {
   private static final Logger LOG = LoggerFactory.getLogger(JobUpdateControllerImpl.class);
   private static final String FATAL_ERROR_FORMAT =
       "Unexpected problem running asynchronous updater for: %s. Triggering shutdown";
+  private static final String UPDATE_AUTO_PAUSED = "Update auto paused";
 
   private final UpdateFactory updateFactory;
   private final Storage storage;
@@ -312,16 +314,13 @@ class JobUpdateControllerImpl implements JobUpdateController {
   private static final Ordering<IJobUpdateEvent> CHRON_ORDERING =
       Ordering.from(Comparator.comparingLong(IJobUpdateEvent::getTimestampMs));
 
-  private long inferLastPulseTimestamp(IJobUpdateDetails details) {
+  private long inferLastPulseTimestamp(IJobUpdateEvent mostRecent) {
     // Pulse timestamps are not durably stored by design. However, on system recovery,
     // setting the timestamp of the last pulse to 0L (aka no pulse) is not correct.
     // By inspecting the job update events we can infer a reasonable time stamp to initialize to.
     // In this case, if the upgrade was not waiting for a pulse previously, we can reuse the
     // timestamp of the last event. This does reset the counter for pulses, but reflects the
     // most likely behaviour of a healthy system.
-
-    // This is safe because we always write at least one job update event on job update creation
-    IJobUpdateEvent mostRecent = CHRON_ORDERING.max(details.getUpdateEvents());
 
     long ts = 0L;
 
@@ -330,6 +329,18 @@ class JobUpdateControllerImpl implements JobUpdateController {
     }
 
     return ts;
+  }
+
+  public boolean isAutoPauseEnabled(IJobUpdateStrategy strategy) {
+    if (strategy.isSetBatchStrategy()) {
+      return strategy.getBatchStrategy().isAutopauseAfterBatch();
+    }
+
+    if (strategy.isSetVarBatchStrategy()) {
+      return strategy.getVarBatchStrategy().isAutopauseAfterBatch();
+    }
+
+    return false;
   }
 
   @Override
@@ -342,12 +353,34 @@ class JobUpdateControllerImpl implements JobUpdateController {
         IJobUpdateInstructions instructions = details.getUpdate().getInstructions();
         IJobUpdateKey key = summary.getKey();
         JobUpdateStatus status = summary.getState().getStatus();
+        // This is safe because we always write at least one job update event on job update creation
+        IJobUpdateEvent latestEvent = CHRON_ORDERING.max(details.getUpdateEvents());
 
         if (isCoordinatedUpdate(instructions)) {
           LOG.info("Automatically restoring pulse state for " + key);
 
-          long pulseMs = inferLastPulseTimestamp(details);
+          long pulseMs = inferLastPulseTimestamp(latestEvent);
           pulseHandler.initializePulseState(details.getUpdate(), status, pulseMs);
+        }
+
+        // Backfill instances seen if the update is auto pause after batch enabled and it is
+        // not currently paused. This takes care of a corner case where the scheduler crashes
+        // between determining the update should be auto paused and successfully pausing
+        // the update.
+        // Note that if if the update is currently paused, a resume will correctly
+        // re-initialize the seen instances data structure.
+        if (latestEvent.getStatus() == ROLLING_FORWARD
+            && isAutoPauseEnabled(instructions.getSettings().getUpdateStrategy())) {
+          LOG.info("Re-populating previously seen instances for " + key);
+
+          instancesSeen.put(key,
+              storeProvider.getJobUpdateStore()
+                  .fetchJobUpdate(key)
+                  .get()
+                  .getInstanceEvents()
+                  .stream()
+                  .map(e -> e.getInstanceId())
+                  .collect(Collectors.toCollection(HashSet::new)));
         }
 
         if (AUTO_RESUME_STATES.contains(status)) {
@@ -636,11 +669,11 @@ class JobUpdateControllerImpl implements JobUpdateController {
     EvaluationResult<Integer> result = update.getUpdater().evaluate(changedInstance, stateProvider);
 
     LOG.info(key + " evaluation result: " + result);
-
-    if (update.getUpdater().isAutoPauseEnabled() && maybeAutoPause(summary, result)) {
+    if (isAutoPauseEnabled(instructions.getSettings().getUpdateStrategy())
+        && maybeAutoPause(summary, result)) {
       changeUpdateStatus(storeProvider,
           summary,
-          newEvent(getPausedState(summary.getState().getStatus())).setMessage("Auto paused"));
+          newEvent(getPausedState(summary.getState().getStatus())).setMessage(UPDATE_AUTO_PAUSED));
       return;
     }
 
