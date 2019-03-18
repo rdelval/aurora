@@ -27,7 +27,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 
 import org.apache.aurora.common.util.StateMachine;
-import org.apache.aurora.scheduler.updater.strategy.AutoPauseEnabledStrategy;
 import org.apache.aurora.scheduler.updater.strategy.UpdateStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,7 +62,6 @@ class OneWayJobUpdater<K, T> {
           .addState(OneWayStatus.FAILED, OneWayStatus.FAILED)
           .throwOnBadTransition(true)
           .build();
-  private final boolean autoPauseEnabled;
 
   /**
    * Creates a new one-way updater.
@@ -85,12 +83,6 @@ class OneWayJobUpdater<K, T> {
     this.instances = ImmutableMap.copyOf(Maps.transformEntries(
         instanceEvaluators,
         (key, value) -> new InstanceUpdate<>("Instance " + key, value)));
-
-    if (strategy instanceof AutoPauseEnabledStrategy) {
-      this.autoPauseEnabled = ((AutoPauseEnabledStrategy) strategy).autoPauseEnabled();
-    } else {
-      this.autoPauseEnabled = false;
-    }
   }
 
   private static final Function<InstanceUpdate<?>, SideEffect.InstanceUpdateStatus> GET_STATE =
@@ -212,18 +204,6 @@ class OneWayJobUpdater<K, T> {
     }
 
     return stateMachine.getState();
-  }
-
-  /**
-   * Checks whether the strategy being used for this update supports auto pausing, and if it
-   * does, whether it has been enabled.
-   *
-   * @return {@code true} if the update strategy supports auto pause and it is enabled.
-   *         {@code false} otherwise.
-   */
-
-  public boolean isAutoPauseEnabled() {
-    return autoPauseEnabled;
   }
 
   /**

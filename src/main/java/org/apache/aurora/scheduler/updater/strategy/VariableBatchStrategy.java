@@ -35,13 +35,10 @@ import org.slf4j.LoggerFactory;
  *
  * @param <T> Instance type.
  */
-public class VariableBatchStrategy<T extends Comparable<T>> implements
-    UpdateStrategy<T>,
-    AutoPauseEnabledStrategy {
+public class VariableBatchStrategy<T extends Comparable<T>> implements UpdateStrategy<T> {
   private final Ordering<T> ordering;
   protected final ImmutableList<Integer> groupSizes;
   private final boolean rollingForward;
-  private final boolean autopauseAfterBatch;
   private Optional<Integer> totalModInstanceCount;
 
   private static final Logger LOG = LoggerFactory.getLogger(VariableBatchStrategy.class);
@@ -55,8 +52,7 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements
   public VariableBatchStrategy(
       Ordering<T> ordering,
       List<Integer> maxActiveGroups,
-      boolean rollingForward,
-      boolean autopauseAfterBatch) {
+      boolean rollingForward) {
 
     this.ordering = Objects.requireNonNull(ordering);
     this.rollingForward = rollingForward;
@@ -65,7 +61,6 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements
 
     this.groupSizes = ImmutableList.copyOf(maxActiveGroups);
     this.totalModInstanceCount = Optional.empty();
-    this.autopauseAfterBatch = autopauseAfterBatch;
   }
 
   // Determine how far we're into the update based upon how many instances are waiting
@@ -146,10 +141,5 @@ public class VariableBatchStrategy<T extends Comparable<T>> implements
    */
   Set<T> doGetNextGroup(Set<T> idle, Set<T> active) {
     return active.isEmpty() ? idle : ImmutableSet.of();
-  }
-
-  @Override
-  public boolean autoPauseEnabled() {
-    return autopauseAfterBatch;
   }
 }
