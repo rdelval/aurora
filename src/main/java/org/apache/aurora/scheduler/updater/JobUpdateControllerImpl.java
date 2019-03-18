@@ -369,8 +369,8 @@ class JobUpdateControllerImpl implements JobUpdateController {
         // the update.
         // Note that if if the update is currently paused, a resume will correctly
         // re-initialize the seen instances data structure.
-        if (latestEvent.getStatus() == ROLLING_FORWARD
-            && isAutoPauseEnabled(instructions.getSettings().getUpdateStrategy())) {
+        if (isAutoPauseEnabled(instructions.getSettings().getUpdateStrategy())
+            && latestEvent.getStatus() == ROLLING_FORWARD) {
           LOG.info("Re-populating previously seen instances for " + key);
 
           instancesSeen.put(key,
@@ -745,10 +745,9 @@ class JobUpdateControllerImpl implements JobUpdateController {
           }
         }
 
-        // Cleans up after auto paused enabled updates. NOOP if it was not an auto pause
-        // enabled update. Only needed for FAILED since SUCCESS cleans up earlier.
-        instancesSeen.remove(key);
       }
+      // Cleans up helper data structure for auto pause after batch updates.
+      instancesSeen.remove(key);
       changeUpdateStatus(storeProvider, summary, event);
     } else {
       LOG.info("Executing side-effects for update of " + key + ": " + result.getSideEffects());
