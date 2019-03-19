@@ -669,8 +669,10 @@ class JobUpdateControllerImpl implements JobUpdateController {
     EvaluationResult<Integer> result = update.getUpdater().evaluate(changedInstance, stateProvider);
 
     LOG.info(key + " evaluation result: " + result);
-    if (isAutoPauseEnabled(instructions.getSettings().getUpdateStrategy())
-        && maybeAutoPause(summary, result)) {
+
+    final boolean autoPauseAfterBatch =
+        isAutoPauseEnabled(instructions.getSettings().getUpdateStrategy());
+    if (autoPauseAfterBatch && maybeAutoPause(summary, result)) {
       changeUpdateStatus(storeProvider,
           summary,
           newEvent(getPausedState(summary.getState().getStatus())).setMessage(UPDATE_AUTO_PAUSED));
@@ -744,10 +746,11 @@ class JobUpdateControllerImpl implements JobUpdateController {
             break;
           }
         }
-
       }
-      // Cleans up helper data structure for auto pause after batch updates.
-      instancesSeen.remove(key);
+
+      if (autoPauseAfterBatch) {
+        instancesSeen.remove(key);
+      }
       changeUpdateStatus(storeProvider, summary, event);
     } else {
       LOG.info("Executing side-effects for update of " + key + ": " + result.getSideEffects());
