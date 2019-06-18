@@ -449,7 +449,7 @@ public class SlaManager extends AbstractIdleService {
   }
 
   private boolean skipSla(IScheduledTask task, long numActive) {
-    if (slaAwareKillNonProd || task.getAssignedTask().getTask().isProduction()) {
+    if (task.getAssignedTask().getTask().isProduction() || slaAwareKillNonProd) {
       return numActive < minRequiredInstances;
     }
     return true;

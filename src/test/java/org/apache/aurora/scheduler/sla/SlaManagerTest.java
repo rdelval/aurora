@@ -34,6 +34,7 @@ import com.google.gson.JsonParser;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import com.google.inject.Module;
 import com.google.inject.TypeLiteral;
 
 import org.apache.aurora.common.stats.StatsProvider;
@@ -99,6 +100,7 @@ public class SlaManagerTest extends EasyMockTest {
 
   private AsyncHttpClient httpClient;
   private SlaManager slaManager;
+  private SlaManager slaManagerNonProdEnabled;
   private StorageTestUtil storageUtil;
   private StateManager stateManager;
   private IServerInfo serverInfo;
@@ -119,40 +121,60 @@ public class SlaManagerTest extends EasyMockTest {
             .setClusterName(CLUSTER_NAME)
             .setStatsUrlPrefix(STATS_URL_PREFIX));
 
+    Module slaManagerMod = new AbstractModule() {
+      @Override
+      protected void configure() {
+        bind(Storage.class).toInstance(storageUtil.storage);
+        bind(StateManager.class).toInstance(stateManager);
+        bind(StatsProvider.class).toInstance(new FakeStatsProvider());
+        bind(TierManager.class).toInstance(TIER_MANAGER);
+        bind(AsyncHttpClient.class)
+            .annotatedWith(SlaManager.HttpClient.class)
+            .toInstance(httpClient);
+
+        bind(new TypeLiteral<Integer>() { })
+            .annotatedWith(SlaManager.MinRequiredInstances.class)
+            .toInstance(2);
+
+        bind(new TypeLiteral<Integer>() { })
+            .annotatedWith(SlaManager.MaxParallelCoordinators.class)
+            .toInstance(10);
+
+        bind(ScheduledExecutorService.class)
+            .annotatedWith(SlaManager.SlaManagerExecutor.class)
+            .toInstance(AsyncUtil.loggingScheduledExecutor(
+                10, "SlaManagerTest-%d", LOG));
+
+        bind(IServerInfo.class).toInstance(serverInfo);
+      }
+    };
+
+    // Creates slaManager with non-prod sla killing turned off
     Injector injector = Guice.createInjector(
+        slaManagerMod,
         new AbstractModule() {
           @Override
           protected void configure() {
-            bind(Storage.class).toInstance(storageUtil.storage);
-            bind(StateManager.class).toInstance(stateManager);
-            bind(StatsProvider.class).toInstance(new FakeStatsProvider());
-            bind(TierManager.class).toInstance(TIER_MANAGER);
-            bind(AsyncHttpClient.class)
-                .annotatedWith(SlaManager.HttpClient.class)
-                .toInstance(httpClient);
-
-            bind(new TypeLiteral<Integer>() { })
-                .annotatedWith(SlaManager.MinRequiredInstances.class)
-                .toInstance(2);
-
             bind(new TypeLiteral<Boolean>() { })
                 .annotatedWith(SlaManager.SlaAwareKillNonProd.class)
                 .toInstance(false);
-
-            bind(new TypeLiteral<Integer>() { })
-                .annotatedWith(SlaManager.MaxParallelCoordinators.class)
-                .toInstance(10);
-
-            bind(ScheduledExecutorService.class)
-                .annotatedWith(SlaManager.SlaManagerExecutor.class)
-                .toInstance(AsyncUtil.loggingScheduledExecutor(
-                    10, "SlaManagerTest-%d", LOG));
-
-            bind(IServerInfo.class).toInstance(serverInfo);
           }
-        }
-    );
+        });
+
+    // Creates slaManager with non-prod sla killing turned on
+    Injector injectorNonProdEnabled = Guice.createInjector(
+        slaManagerMod,
+        new AbstractModule() {
+          @Override
+          protected void configure() {
+            bind(new TypeLiteral<Boolean>() { })
+                .annotatedWith(SlaManager.SlaAwareKillNonProd.class)
+                .toInstance(true);
+          }
+        });
+
     slaManager = injector.getInstance(SlaManager.class);
+    slaManagerNonProdEnabled = injectorNonProdEnabled.getInstance(SlaManager.class);
 
     addTearDown(() -> jettyServer.stop());
   }
@@ -383,6 +405,40 @@ public class SlaManagerTest extends EasyMockTest {
                 new CountSlaPolicy()
                     .setCount(0)
                     .setDurationSecs(0))),
+        storeProvider -> storeProvider
+            .getUnsafeTaskStore()
+            .fetchTask(task1.getAssignedTask().getTaskId()),
+        ImmutableMap.of(),
+        false);
+  }
+
+  /**
+   * Verifies that SLA check passes for Non Prod tier when -sla_aware_kill_non_prod flag is turned
+   * on and the supplied {@link Storage.MutateWork} gets executed for a job is not the correct tier.
+   */
+  @Test
+  public void testCheckCountSlaForNonProdEnabled() {
+    IScheduledTask task1 = makeTask("taskA", 1, RUNNING, 1000, false);
+    IScheduledTask task2 = makeTask("taskB", 2, RUNNING, 1000, false);
+    IScheduledTask task3 = makeTask("taskC", 3, RUNNING, 1000, false);
+
+    // mock calls to fetch all active tasks for the job for sla calculation
+    expect(storageUtil.taskStore.fetchTasks(Query.jobScoped(Tasks.getJob(task1)).active()))
+        .andReturn(ImmutableSet.of(task1, task2, task3));
+
+    // mock calls to fetch all RUNNING tasks for the job for sla calculation
+    expect(storageUtil.taskStore.fetchTasks(Query.jobScoped(Tasks.getJob(task1)).byStatus(RUNNING)))
+        .andReturn(ImmutableSet.of(task1, task2, task3));
+
+    // expect that the fetchTask in the work is called, after sla check passes
+    expect(storageUtil.taskStore.fetchTask(task1.getAssignedTask().getTaskId()))
+        .andReturn(Optional.of(task1));
+
+    control.replay();
+
+    slaManagerNonProdEnabled.checkSlaThenAct(
+        task1,
+        COUNT_SLA_POLICY,
         storeProvider -> storeProvider
             .getUnsafeTaskStore()
             .fetchTask(task1.getAssignedTask().getTaskId()),
