@@ -20,6 +20,8 @@
 - loader.load() now uses memoization on the config file path so that we only load and process
   each config file once.
 - Instances run with custom executors will no longer show links to thermos observer.
+- Added flag `-sla_aware_kill_non_prod` which enables SLA aware killing for updates 
+  and draining for non-production tier tasks.
 
 ### Deprecations and removals:
 

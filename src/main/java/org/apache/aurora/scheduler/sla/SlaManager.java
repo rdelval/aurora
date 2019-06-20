@@ -42,7 +42,6 @@ import org.apache.aurora.common.quantity.Amount;
 import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.stats.StatsProvider;
 import org.apache.aurora.gen.ScheduleStatus;
-import org.apache.aurora.scheduler.TierManager;
 import org.apache.aurora.scheduler.base.Query;
 import org.apache.aurora.scheduler.base.Tasks;
 import org.apache.aurora.scheduler.config.types.TimeAmount;
@@ -98,6 +97,11 @@ public class SlaManager extends AbstractIdleService {
   @interface MinRequiredInstances { }
 
   @VisibleForTesting
+  @Qualifier
+  @Target({ FIELD, PARAMETER, METHOD }) @Retention(RUNTIME)
+  @interface SlaAwareKillNonProd { }
+
+  @VisibleForTesting
   static final String TASK_PARAM = "task";
 
   private static final String ATTEMPTS_STAT_NAME = "sla_coordinator_attempts";
@@ -112,7 +116,7 @@ public class SlaManager extends AbstractIdleService {
   private final AsyncHttpClient httpClient;
   private final Striped<Lock> lock;
   private final int minRequiredInstances;
-  private final TierManager tierManager;
+  private final boolean slaAwareKillNonProd;
 
   private final AtomicLong attemptsCounter;
   private final AtomicLong successCounter;
@@ -130,14 +134,13 @@ public class SlaManager extends AbstractIdleService {
              Storage storage,
              IServerInfo serverInfo,
              @HttpClient AsyncHttpClient httpClient,
-             TierManager tierManager,
-             StatsProvider statsProvider) {
+             StatsProvider statsProvider,
+             @SlaAwareKillNonProd boolean slaAwareKillNonProd) {
 
     this.executor = requireNonNull(executor);
     this.storage = requireNonNull(storage);
     this.serverInfo = requireNonNull(serverInfo);
     this.httpClient = requireNonNull(httpClient);
-    this.tierManager = requireNonNull(tierManager);
     this.minRequiredInstances = requireNonNull(minRequiredInstances);
     this.attemptsCounter = statsProvider.makeCounter(ATTEMPTS_STAT_NAME);
     this.successCounter = statsProvider.makeCounter(SUCCESS_STAT_NAME);
@@ -169,6 +172,7 @@ public class SlaManager extends AbstractIdleService {
           }
         }
     );
+    this.slaAwareKillNonProd = slaAwareKillNonProd;
   }
 
   private long getSlaDuration(ISlaPolicy slaPolicy) {
@@ -445,8 +449,7 @@ public class SlaManager extends AbstractIdleService {
   }
 
   private boolean skipSla(IScheduledTask task, long numActive) {
-    if (!tierManager.getTier(task.getAssignedTask().getTask()).isPreemptible()
-        && !tierManager.getTier(task.getAssignedTask().getTask()).isRevocable()) {
+    if (task.getAssignedTask().getTask().isProduction() || slaAwareKillNonProd) {
       return numActive < minRequiredInstances;
     }
     return true;
