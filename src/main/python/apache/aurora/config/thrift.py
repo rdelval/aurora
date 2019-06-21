@@ -26,6 +26,7 @@ from apache.aurora.config.schema.base import (
     CountSlaPolicy as PystachioCountSlaPolicy,
     Docker,
     DockerImage as PystachioDockerImage,
+    DockerVolume as PystachioDockerVolume,
     FileSecret as PystachioFileSecret,
     HealthCheckConfig,
     HostPath as PystachioHostPath,
@@ -229,7 +230,7 @@ def create_update_strategy_config(update_strategy):
 
 
 def volume_to_thrift(volume):
-  containerPath=fully_interpolated(volume.container_path())
+  containerPath = fully_interpolated(volume.container_path())
   mode = parse_enum(Mode, volume.mode())
   source = getattr(volume.source(), 'unwrap', lambda: Empty)()
 
