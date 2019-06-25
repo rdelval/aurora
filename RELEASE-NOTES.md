@@ -20,6 +20,8 @@
 - loader.load() now uses memoization on the config file path so that we only load and process
   each config file once.
 - Instances run with custom executors will no longer show links to thermos observer.
+- Users may now set a value for the URI fetcher to rename a downloaded artifact to after it
+  has been downloaded.
 
 ### Deprecations and removals:
 
