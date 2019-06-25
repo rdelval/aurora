@@ -22,6 +22,8 @@
 - Instances run with custom executors will no longer show links to thermos observer.
 - Users may now set a value for the URI fetcher to rename a downloaded artifact to after it
   has been downloaded.
+- Added flag `-sla_aware_kill_non_prod` which enables SLA aware killing for updates 
+  and draining for non-production tier tasks.
 
 ### Deprecations and removals:
 
