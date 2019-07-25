@@ -46,7 +46,6 @@ import org.apache.aurora.scheduler.storage.entities.IServerInfo;
 import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
 import org.apache.mesos.v1.Protos;
 import org.apache.mesos.v1.Protos.CommandInfo;
-import org.apache.mesos.v1.Protos.CommandInfo.URI;
 import org.apache.mesos.v1.Protos.CommandInfo.URI.Builder;
 import org.apache.mesos.v1.Protos.ContainerInfo;
 import org.apache.mesos.v1.Protos.DiscoveryInfo;
@@ -297,7 +296,6 @@ public interface MesosTaskFactory {
           .build();
     }
 
-
     private static Protos.CommandInfo.URI toProtoURI(IMesosFetcherURI u) {
       Builder builder = Protos.CommandInfo.URI.newBuilder()
           .setValue(u.getValue())
@@ -305,7 +303,7 @@ public interface MesosTaskFactory {
           .setExtract(u.isExtract())
           .setCache(u.isCache());
 
-      if(u.isSetOutputFile()) {
+      if (u.isSetOutputFile()) {
         builder.setOutputFile(u.getOutputFile());
       }
 
