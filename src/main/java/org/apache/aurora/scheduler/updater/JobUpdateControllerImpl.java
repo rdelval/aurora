@@ -140,8 +140,7 @@ class JobUpdateControllerImpl implements JobUpdateController {
 
   // Used only for updates that have auto pause enabled. Keeps track of what instances
   // have already been seen by the updater in order to detect when a new batch is started.
-  private final Map<IJobUpdateKey, Set<Integer>> instancesSeen =
-      new ConcurrentHashMap<IJobUpdateKey, Set<Integer>>();
+  private final Map<IJobUpdateKey, Set<Integer>> instancesSeen = new ConcurrentHashMap<>();
 
   private final LoadingCache<JobUpdateStatus, AtomicLong> jobUpdateEventStats;
   private final LoadingCache<JobUpdateAction, AtomicLong> jobUpdateActionStats;
@@ -362,13 +361,13 @@ class JobUpdateControllerImpl implements JobUpdateController {
           long pulseMs = inferLastPulseTimestamp(latestEvent);
           pulseHandler.initializePulseState(details.getUpdate(), status, pulseMs);
         }
-
-        // Backfill instances seen if the update is auto pause after batch enabled and it is
-        // not currently paused. This takes care of a corner case where the scheduler crashes
-        // between determining the update should be auto paused and successfully pausing
-        // the update.
-        // Note that if if the update is currently paused, a resume will correctly
-        // re-initialize the seen instances data structure.
+        // Since the restart causes the update to lose state, we backfill instances seen if:
+        // a) The update has auto pause after batch enabled
+        // b) The update is not currently paused.
+        // This restores necessary state for any update that was ROLLING_FORWARD when
+        // the scheduler was restarted to avoid crashing the scheduler.
+        // We do not backfill when the update is in the ROLL_FORWARD_PAUSED status as the subsequent
+        // resume will correctly re-initialize the seen instances state for the update.
         if (isAutoPauseEnabled(instructions.getSettings().getUpdateStrategy())
             && latestEvent.getStatus() == ROLLING_FORWARD) {
           LOG.info("Re-populating previously seen instances for " + key);

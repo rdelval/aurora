@@ -394,7 +394,7 @@ Update strategy which will wait until a maximum of ``batch_size`` number of inst
 | object                       | type     | description
 | ---------------------------- | :------: | ------------
 | ```batch_size```             | Integer  | Maximum number of shards to be updated in one iteration (Default: 1)
-| ```autopause_after_batch```             | Boolean  | Automatically pauses update before starting a new batch. (Default: False)
+| ```autopause_after_batch```             | Boolean  | Automatically pauses update after completing a batch. (Default: False)
 
 ### VariableBatchUpdateStrategy Objects
 
