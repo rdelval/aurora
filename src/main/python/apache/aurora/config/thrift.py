@@ -218,7 +218,9 @@ def create_update_strategy_config(update_strategy):
     return JobUpdateStrategy(
         queueStrategy=None,
         batchStrategy=BatchJobUpdateStrategy(
-            groupSize=fully_interpolated(unwrapped.batch_size())),
+            groupSize=fully_interpolated(unwrapped.batch_size()),
+            autopauseAfterBatch=fully_interpolated(
+              unwrapped.autopause_after_batch())),
         varBatchStrategy=None)
 
   if isinstance(unwrapped, PystachioVariableBatchUpdateStrategy):
@@ -226,7 +228,9 @@ def create_update_strategy_config(update_strategy):
         queueStrategy=None,
         batchStrategy=None,
         varBatchStrategy=VariableBatchJobUpdateStrategy(
-            groupSizes=fully_interpolated(unwrapped.batch_sizes())))
+            groupSizes=fully_interpolated(unwrapped.batch_sizes()),
+            autopauseAfterBatch=fully_interpolated(
+                unwrapped.autopause_after_batch())))
 
 
 def volume_to_thrift(volume):

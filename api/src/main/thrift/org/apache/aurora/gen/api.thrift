@@ -152,6 +152,8 @@ struct MesosFetcherURI {
   2: optional bool extract
   /** Cache value using Mesos Fetcher caching mechanism **/
   3: optional bool cache
+  /** Filename for the resource that is downloaded **/
+  4: optional string outputFile
 }
 
 struct ExecutorConfig {
@@ -763,6 +765,8 @@ struct QueueJobUpdateStrategy {
  */
 struct BatchJobUpdateStrategy {
   1: i32 groupSize
+  /* Update will pause automatically after each batch completes */
+  2: bool autopauseAfterBatch
 }
 
 /** Same as Batch strategy but each time an active group completes, the size of the next active
@@ -770,6 +774,8 @@ struct BatchJobUpdateStrategy {
  */
 struct VariableBatchJobUpdateStrategy {
   1: list<i32> groupSizes
+  /* Update will pause automatically after each batch completes */
+  2: bool autopauseAfterBatch
 }
 
 union JobUpdateStrategy {
