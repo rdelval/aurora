@@ -187,44 +187,23 @@ struct DockerVolume {
   /** The specific options to pass on to the driver. */
   3: optional list<DockerParameter> options
 }
-
-struct FileSecret {
-  /** The name field is used to lookup the secret source */
-  1: string name
-  /** The key field can be used to reference a single value within a secret containing arbitrary key-value pairs. */
-  2: optional string key
-}
-
-/** The type of volume mount */
-enum VolumeType {
-  UNKNOWN = 0
-  /** Represent container volume type 'HOST_PATH' requires isolator 'filesystem/linux' */
-  HOST_PATH = 1
-  /** Represent container volume type 'DOCKER_VOLUME' requires isolator 'docker/volume' */
-  DOCKER_VOLUME = 2
-  /** Represent container volume type 'FILE_SECRET' requires isolator 'volume/secret' */
-  FILE_SECRET = 3
-}
-
 union VolumeSource {
   1: string hostPath
   2: DockerVolume docker
-  3: FileSecret fileSecret
 }
-
 
 /** A volume mount point within a container */
 struct Volume {
   /** The path inside the container where the mount will be created. */
   1: string containerPath
-  /** The path on the host that will serve as the source for the mount. */
+  /** DEPRECATED: Set value in VolumeSource instead.
+   * The path on the host that will serve as the source for the mount.
+   */
   2: string hostPath
   /** The access mode */
   3: Mode mode
-  /** The volume type - set optional for backwards compatibility */
-  4: optional VolumeType volumeType = VolumeType.UNKNOWN
   /** The volume source - set optional for backwards compatibility */
-  5: optional VolumeSource source
+  4: optional VolumeSource source
 }
 
 /** Describes an image for use with the Mesos unified containerizer in the Docker format */
