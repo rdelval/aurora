@@ -27,7 +27,6 @@ import com.google.protobuf.ByteString;
 
 import org.apache.aurora.Protobufs;
 import org.apache.aurora.codec.ThriftBinaryCodec;
-import org.apache.aurora.gen.VolumeType;
 import org.apache.aurora.scheduler.base.JobKeys;
 import org.apache.aurora.scheduler.base.SchedulerException;
 import org.apache.aurora.scheduler.base.Tasks;
@@ -46,6 +45,7 @@ import org.apache.aurora.scheduler.storage.entities.IMesosFetcherURI;
 import org.apache.aurora.scheduler.storage.entities.IServerInfo;
 import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
 import org.apache.aurora.scheduler.storage.entities.IVolume;
+import org.apache.aurora.scheduler.storage.entities.IVolumeSource;
 import org.apache.mesos.v1.Protos;
 import org.apache.mesos.v1.Protos.CommandInfo;
 import org.apache.mesos.v1.Protos.CommandInfo.URI.Builder;
@@ -60,6 +60,7 @@ import org.apache.mesos.v1.Protos.Port;
 import org.apache.mesos.v1.Protos.Resource;
 import org.apache.mesos.v1.Protos.TaskID;
 import org.apache.mesos.v1.Protos.TaskInfo;
+import org.apache.mesos.v1.Protos.Volume;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -279,63 +280,37 @@ public interface MesosTaskFactory {
 
     private Protos.Volume getContainerVolume(IVolume volume) {
       requireNonNull(volume);
+      Volume.Builder builder = Volume.newBuilder();
+      IVolumeSource volumeSource = volume.getSource();
 
-      if (volume.getHostPath() == null && volume.isSetVolumeType()) {
-        if (volume.getVolumeType() == VolumeType.HOST_PATH) {
-          return Protos.Volume.newBuilder()
-              .setMode(Protos.Volume.Mode.valueOf(volume.getMode().name()))
-              .setHostPath(volume.getSource().getHostPath())
-              .setContainerPath(volume.getContainerPath())
-              .build();
-        } else if (volume.getVolumeType() == VolumeType.DOCKER_VOLUME) {
-          Iterable<Protos.Parameter> options = volume.getSource().getDocker().getOptions().stream()
-              .map(item -> Protos.Parameter.newBuilder()
-                  .setKey(item.getName())
-                  .setValue(item.getValue()).build())
-              .collect(Collectors.toList());
-
-          return Protos.Volume.newBuilder()
-              .setMode(Protos.Volume.Mode.valueOf(volume.getMode().name()))
-              .setSource(Protos.Volume.Source.newBuilder()
-                  .setDockerVolume(Protos.Volume.Source.DockerVolume.newBuilder()
-                      .setDriver(volume.getSource().getDocker().getDriver())
-                      .setName(volume.getSource().getDocker().getName())
-                      .setDriverOptions(Protos.Parameters.newBuilder()
-                          .addAllParameter(options))
-                      .build())
-                  .setType(Protos.Volume.Source.Type.DOCKER_VOLUME)
-                  .build())
-              .setContainerPath(volume.getContainerPath())
-              .build();
-
-        } else if (volume.getVolumeType() == VolumeType.FILE_SECRET) {
-          Protos.Secret.Reference.Builder reference = Protos.Secret.Reference.newBuilder();
-          reference.setName(volume.getSource().getFileSecret().getName());
-          if (volume.getSource().getFileSecret().isSetKey()) {
-            reference.setKey(volume.getSource().getFileSecret().getKey());
-          }
-
-          return Protos.Volume.newBuilder()
-              .setMode(Protos.Volume.Mode.valueOf(volume.getMode().name()))
-              .setSource(Protos.Volume.Source.newBuilder()
-                  .setSecret(Protos.Secret.newBuilder()
-                      .setReference(reference.build())
-                      .setType(Protos.Secret.Type.REFERENCE)
-                      .build())
-                  .setType(Protos.Volume.Source.Type.SECRET)
-                  .build())
-              .setContainerPath(volume.getContainerPath())
-              .build();
-
-        }
-        throw new SchedulerException("Task had no supported volume set.");
+      if (volumeSource.isSetHostPath()) {
+        builder.setMode(Protos.Volume.Mode.valueOf(volume.getMode().name()))
+            .setHostPath(volume.getSource().getHostPath())
+            .setContainerPath(volume.getContainerPath());
       }
 
-      return Protos.Volume.newBuilder()
-          .setMode(Protos.Volume.Mode.valueOf(volume.getMode().name()))
-          .setHostPath(volume.getHostPath())
-          .setContainerPath(volume.getContainerPath())
-          .build();
+      if (volumeSource.isSetDocker()) {
+        Iterable<Protos.Parameter> options = volumeSource.getDocker().getOptions().stream()
+            .map(item -> Protos.Parameter.newBuilder()
+                .setKey(item.getName())
+                .setValue(item.getValue()).build())
+            .collect(Collectors.toList());
+
+        builder.setMode(Protos.Volume.Mode.valueOf(volume.getMode().name()))
+            .setSource(Protos.Volume.Source.newBuilder()
+                .setDockerVolume(Protos.Volume.Source.DockerVolume.newBuilder()
+                    .setDriver(volume.getSource().getDocker().getDriver())
+                    .setName(volume.getSource().getDocker().getName())
+                    .setDriverOptions(Protos.Parameters.newBuilder()
+                        .addAllParameter(options))
+                    .build())
+                .setType(Protos.Volume.Source.Type.DOCKER_VOLUME)
+                .build())
+            .setContainerPath(volume.getContainerPath());
+
+      }
+
+      return builder.build();
     }
 
     private ContainerInfo getDockerContainerInfo(
