@@ -138,6 +138,8 @@ For more details, please see https://issues.apache.org/jira/browse/AURORA-1169
 project(':ui') {
   apply plugin: 'com.moowork.node'
   node {
+    // Version of node to use.
+    version = '10.16.3'
     download = true
   }
 
