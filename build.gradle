@@ -78,7 +78,7 @@ For more details, please see https://issues.apache.org/jira/browse/AURORA-1169
   }
 
   ext.commonsLangRev = '2.6'
-  ext.curatorRev = '2.12.0'
+  ext.curatorRev = '4.2.0'
   ext.gsonRev = '2.3.1'
   ext.guavaRev = '23.2-jre'
   ext.guiceRev = '4.1.0'
@@ -96,7 +96,7 @@ For more details, please see https://issues.apache.org/jira/browse/AURORA-1169
   ext.slf4jRev = '1.7.25'
   ext.stringTemplateRev = '3.2.1'
   ext.thriftRev = '0.10.0'
-  ext.zookeeperRev = '3.4.8'
+  ext.zookeeperRev = '3.4.14'
 
   configurations.all {
     exclude module: 'junit-dep'
