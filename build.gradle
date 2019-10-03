@@ -85,7 +85,7 @@ For more details, please see https://issues.apache.org/jira/browse/AURORA-1169
   ext.httpclientRev = '4.5.2'
   ext.httpcoreRev = '4.4.4'
   ext.asyncHttpclientRev = '2.10.3'
-  ext.jacksonRev = '2.5.1'
+  ext.jacksonRev = '2.9.9'
   ext.jaxRsRev = '2.0'
   ext.junitRev = '4.12'
   ext.logbackRev = '1.2.3'
@@ -382,7 +382,7 @@ dependencies {
   compile "com.google.inject.extensions:guice-multibindings:${guiceRev}"
   compile "com.google.inject.extensions:guice-servlet:${guiceRev}"
   compile "com.google.protobuf:protobuf-java:${protobufRev}"
-  compile 'com.hubspot.jackson:jackson-datatype-protobuf:0.9.3'
+  compile 'com.hubspot.jackson:jackson-datatype-protobuf:0.9.10-jackson2.9-proto2'
   compile "com.fasterxml.jackson.core:jackson-core:${jacksonRev}"
   compile "org.jboss.resteasy:resteasy-guice:${resteasyRev}"
   compile "org.jboss.resteasy:resteasy-jackson-provider:${resteasyRev}"

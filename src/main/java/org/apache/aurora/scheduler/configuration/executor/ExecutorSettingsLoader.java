@@ -31,6 +31,7 @@ import org.apache.mesos.v1.Protos.ExecutorInfo;
 import org.apache.mesos.v1.Protos.Volume;
 
 import static com.fasterxml.jackson.databind.PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES;
+import static com.fasterxml.jackson.databind.PropertyNamingStrategy.SNAKE_CASE;
 
 /**
  * A utility class to read JSON-formatted executor configurations.
@@ -70,7 +71,7 @@ public final class ExecutorSettingsLoader {
 
     ObjectMapper mapper = new ObjectMapper()
         .registerModule(new ProtobufModule())
-        .setPropertyNamingStrategy(CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES);
+        .setPropertyNamingStrategy(SNAKE_CASE);
     List<Schema> parsed;
     try {
       parsed = mapper.readValue(configContents, new TypeReference<List<Schema>>() { });
