@@ -30,7 +30,6 @@ import org.apache.mesos.v1.Protos.ExecutorID;
 import org.apache.mesos.v1.Protos.ExecutorInfo;
 import org.apache.mesos.v1.Protos.Volume;
 
-import static com.fasterxml.jackson.databind.PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES;
 import static com.fasterxml.jackson.databind.PropertyNamingStrategy.SNAKE_CASE;
 
 /**
