@@ -173,13 +173,16 @@ def test_restart(jobkey):
 
 
 def test_update_add_only_kill_only(jobkey, config, cluster, *bind_parameters):
-    subprocess.run(
-        ["aurora", "update", "start", jobkey, config, "--bind=profile.instances=3"],
-        text=True)
+    subprocess.run(["aurora", "update", "start", jobkey, config, "--bind=profile.instances=3"])
 
-    assert_active_update_state(jobkey=jobkey, expected_state="RUNNING")
+    update_id = assert_active_update_state(jobkey=jobkey, expected_state="ROLLING_FORWARD")
 
-    pass
+    if update_id == ""
+        return False
+
+    subprocess.run(["aurora", "update", "wait", jobkey, update_id])
+
+
 
 
 def test_update(jobkey, updated_config, cluster, bind_parameters):
@@ -195,9 +198,9 @@ def test_announce(role, env, job):
 
 
 def test_run(jobkey):
-    proc = subprocess.run(["aurora", "task", "run", f"{jobkey}", "ls -a"], capture_output=True, text=True)
+    proc = subprocess.check_ouput(["aurora", "task", "run", f"{jobkey}", "ls -a"], text=True)
 
-    print(proc.stdout)
+    print(proc)
 
     pass
 
@@ -217,12 +220,19 @@ def assert_active_update_state(jobkey, expected_state):
             ["aurora", "update", "list", jobkey, "--status=active", "--write-json"]))
 
     if len(statuses) == 0:
-        return False
+        return ""
 
     if statuses[0]["status"] != expected_state:
-        return False
+        return ""
 
-    return True
+    return statuses[0]["id"]
+
+
+def assert_update_state_by_id(jobkey, update_id, expected_state):
+    statuses = json.loads(
+        subprocess.check_output(
+            ["aurora", "update", "info", jobkey, update_id, "--write-json"]))
+    print(statuses)
 
 
 def main():
