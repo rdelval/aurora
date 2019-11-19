@@ -56,7 +56,7 @@ def test_http_example(cluster, role, env, base_config, updated_config, bad_healt
 
 
 def test_config(config, jobkey):
-    config_list = subprocess.check_output(["aurora", "config", "list", config],text=True)
+    config_list = subprocess.check_output(["aurora", "config", "list", config], text=True)
     if config_list.find(jobkey) >= 0:
         return True
     else:
@@ -177,12 +177,13 @@ def test_update_add_only_kill_only(jobkey, config, cluster, *bind_parameters):
 
     update_id = assert_active_update_state(jobkey=jobkey, expected_state="ROLLING_FORWARD")
 
-    if update_id == ""
+    if update_id == "":
         return False
 
     subprocess.run(["aurora", "update", "wait", jobkey, update_id])
 
-
+    assert_update_state_by_id(jobkey=jobkey, update_id=update_id, expected_state="ROLLED_FORWARD")
+    wait_until_task_counts(jobkey=jobkey, expected_running=3, expected_pending=0)
 
 
 def test_update(jobkey, updated_config, cluster, bind_parameters):
@@ -229,10 +230,40 @@ def assert_active_update_state(jobkey, expected_state):
 
 
 def assert_update_state_by_id(jobkey, update_id, expected_state):
-    statuses = json.loads(
+    update_info = json.loads(
         subprocess.check_output(
             ["aurora", "update", "info", jobkey, update_id, "--write-json"]))
-    print(statuses)
+
+    if "status" not in update_info or update_info["status"] != expected_state:
+        return False
+
+    return True
+
+
+def wait_until_task_counts(jobkey, expected_running, expected_pending):
+    for _ in range(120):
+        job_statuses = json.loads(
+            subprocess.check_output(
+                ["aurora", "job", "status", jobkey, "--write-json"]))
+
+        if "active" not in job_statuses or len(job_statuses["active"]) == 0:
+            time.sleep(20)
+
+        print(job_statuses)
+        running = 0
+        pending = 0
+        for task in job_statuses["active"]:
+            if "status" not in task:
+                continue
+            if task["status"] == "RUNNING":
+                running += 1
+            if task["status"] == "PENDING":
+                pending += 1
+
+        if running == expected_running and pending == expected_pending:
+            return True
+
+    return False
 
 
 def main():
