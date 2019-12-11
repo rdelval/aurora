@@ -13,12 +13,12 @@
  */
 package org.apache.aurora.scheduler.updater;
 
-import com.google.common.collect.ImmutableSet;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableSet;
 
 import org.apache.aurora.scheduler.updater.StateEvaluator.Failure;
 
@@ -142,6 +142,7 @@ public class SideEffect {
      */
     FAILED;
 
-    public static final Set<InstanceUpdateStatus> TERMINAL_STATUSES = ImmutableSet.of(SUCCEEDED, FAILED);
+    public static final Set<InstanceUpdateStatus> TERMINAL_STATUSES =
+        ImmutableSet.of(SUCCEEDED, FAILED);
   }
 }

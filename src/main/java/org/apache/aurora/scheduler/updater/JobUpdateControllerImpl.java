@@ -32,7 +32,6 @@ import com.google.common.base.Functions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -764,14 +763,13 @@ class JobUpdateControllerImpl implements JobUpdateController {
         }
       }
 
-      if (isAutoPauseEnabled(instructions.getSettings().getUpdateStrategy())) {
-        instancesSeen.remove(key);
-      }
       changeUpdateStatus(storeProvider, summary, event);
       return;
     }
 
-    LOG.info("Executing side-effects for update of {}: {}", key, result.getSideEffects().entrySet());
+    LOG.info("Executing side-effects for update of {}: {}",
+        key,
+        result.getSideEffects().entrySet());
     for (Map.Entry<Integer, SideEffect> entry : result.getSideEffects().entrySet()) {
       IInstanceKey instance = InstanceKeys.from(key.getJob(), entry.getKey());
 
@@ -887,11 +885,9 @@ class JobUpdateControllerImpl implements JobUpdateController {
       Set<Integer> instancesCached = instancesSeen.get(key);
       Set<Integer> instancesBeingUpdated = result.getSideEffects().keySet();
 
-      // On the final batch, pause for acknowledgement and remove the cache of instances.
-      // This will cause the else branch to get run on resume and the update will finish.
       if (result.getStatus() == SUCCEEDED) {
         instancesSeen.remove(key);
-        return true;
+        return false;
       }
 
       // If the update evaluation is dealing with new instances, that signals we are at a barrier
