@@ -16,8 +16,8 @@ plugins {
   id 'com.github.ben-manes.versions' version '0.11.3'
   id 'com.github.hierynomus.license' version '0.11.0'
   id 'com.moowork.node' version '1.2.0'
-  id 'me.champeau.gradle.jmh' version '0.4.4'
-  id "com.github.spotbugs" version "1.6.2"
+  id 'me.champeau.gradle.jmh' version '0.4.8'
+  id "com.github.spotbugs" version "1.6.4"
 }
 
 apply plugin: 'application'
@@ -323,7 +323,8 @@ task enforceVersion {
 
 compileJava.dependsOn(enforceVersion);
 
-task wrapper(type: Wrapper) {
+
+wrapper {
   gradleVersion = project(':buildSrc').GRADLE_VERSION
 }
 
